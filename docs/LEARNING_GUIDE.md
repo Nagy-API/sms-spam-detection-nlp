@@ -113,6 +113,11 @@ rarer class (spam is 12%) by `n / (2 · n_class)`.
 `P(spam | s) = 1 / (1 + exp(−(a·s + b)))`, a one-feature logistic regression, on **out-of-fold**
 scores (scores the model produced for messages it was *not* trained on). In-sample scores are
 over-confident, which is why out-of-fold scores are required. Result: `a ≈ 6.2, b ≈ 0.65`.
+One subtlety to be able to explain: the out-of-fold scores come from models trained on 80% of the
+development data, but the calibrator is applied to the final model trained on 100%, whose margins
+can be slightly larger. This is the standard "cross-validated Platt" compromise. We checked it did
+not hurt on held-out data (locked-test ECE 0.011, Brier 0.0036). The alternative,
+`CalibratedClassifierCV`, would ship an ensemble of 5 models (5× the artifact).
 
 **Decision.** With calibrated probabilities, the threshold that minimizes expected cost is
 `p* = C_FP / (C_FP + C_FN)`. We set a false positive (a real message flagged) at 3× the cost of a
@@ -241,6 +246,8 @@ To try your own candidate, add a `[[candidates]]` block to `configs/pipeline.tom
 * **Adversarial robustness:** paraphrasing, image-only spam, and link shorteners are out of reach.
 * **Distribution shift:** calibration holds on this corpus only.
 * **Evaluation:** the test set is internal and small (128 spam), so intervals are wide.
+* **Calibration transfer:** Platt parameters are fitted on 80%-data models and applied to the
+  100%-data model (see section 5). This is fine on this distribution, but it is not guaranteed.
 
 ## 14. Interview questions about this implementation
 

@@ -182,3 +182,43 @@ def test_model_dir_can_be_set_by_environment(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setenv("SPAM_MODEL_DIR", str(tmp_path / "nowhere"))
     with TestClient(create_app()) as client:
         assert client.get("/ready").status_code == 503
+
+
+# ----------------------------------------------------- regressions from hosted review
+@pytest.mark.parametrize("method", ["GET", "HEAD", "PUT", "PATCH", "DELETE"])
+def test_wrong_method_on_predict_is_405_not_404(client: TestClient, method: str) -> None:
+    # Found on the hosted Preview: the static mount at "/" answered GET /predict with 404.
+    response = client.request(method, "/predict")
+    assert response.status_code == 405
+    assert response.headers["allow"] == "POST"
+
+
+@pytest.mark.parametrize(
+    "supplied",
+    ["x" * 129, "has space", "new\nline", "<script>", "ünïcode".encode("latin-1"), ""],
+)
+def test_unsafe_request_ids_are_replaced(client: TestClient, supplied: str | bytes) -> None:
+    response = client.get("/health", headers={"x-request-id": supplied} if supplied else {})
+    echoed = response.headers["x-request-id"]
+    assert echoed != supplied
+    assert re.fullmatch(r"[0-9a-f]{32}", echoed)
+
+
+def test_safe_request_ids_are_kept(client: TestClient) -> None:
+    for supplied in ("abc-123", "trace.id:42_X", "a" * 128):
+        assert client.get("/health", headers={"x-request-id": supplied}).headers["x-request-id"] == supplied
+
+
+def test_request_logs_report_peak_memory(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+    import sys
+
+    logger = logging.getLogger("spam_detector.api")
+    logger.addHandler(caplog.handler)
+    try:
+        client.get("/health")
+    finally:
+        logger.removeHandler(caplog.handler)
+    fields = [r for r in caplog.records if r.getMessage() == "request"][-1].fields
+    assert "peak_rss_mib" in fields
+    if sys.platform != "win32":  # the resource module does not exist on Windows
+        assert fields["peak_rss_mib"] > 0

@@ -47,6 +47,7 @@ Clients must ignore unknown response fields (new fields may be added in minor ve
 | 422 | `{"detail":[{"type","loc","msg"}]}` | Missing/blank/non-string `text`, `string_too_long`, invalid JSON | `string_too_long` → length message. `string_too_short`, `value_error`, `missing` → "enter a message". Otherwise → "check your input" |
 | 413 | `{"detail":{"type":"payload_too_large","msg"}}` | Body > 64 KiB | Length message |
 | 503 | `{"detail":{"type":"model_unavailable","msg"}}` | Artifact missing, corrupted, or incompatible | "Service unavailable, try later" |
+| 405 | `{"detail":{"type":"method_not_allowed","msg"}}`, header `Allow: POST` | `GET`/`HEAD`/`PUT`/`PATCH`/`DELETE` on `/predict` | Not user-facing (client bug) |
 | 500 | `{"detail":{"type":"internal_error","msg"}}` | Unexpected bug | Generic error |
 
 422 bodies never echo the submitted text (FastAPI's default does; we override it).
@@ -61,8 +62,9 @@ Clients must ignore unknown response fields (new fields may be added in minor ve
 
 ## Headers
 
-Every response carries `X-Request-ID` (echoes an incoming `X-Request-ID`, otherwise generated;
-include it in bug reports), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
+Every response carries `X-Request-ID`: an incoming `X-Request-ID` is echoed only if it matches
+`[A-Za-z0-9._:-]{1,128}`, otherwise a random 32-hex ID is generated (the value is also written to
+logs, so arbitrary client text is never reflected). Include it in bug reports. Also sent: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
 `Referrer-Policy: no-referrer`. API responses add `Cache-Control: no-store`. Frontend pages get a
 strict CSP: `script-src 'self'; style-src 'self'; connect-src 'self'`, and no inline scripts or styles.
 **A redesign that adds inline `<script>`/`<style>`, web fonts, or third-party origins must update

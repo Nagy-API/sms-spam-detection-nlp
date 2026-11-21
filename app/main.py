@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import time
 import uuid
@@ -49,6 +50,23 @@ MAX_MESSAGE_CHARS = 5000
 MAX_BODY_BYTES = 64 * 1024
 
 logger = logging.getLogger("spam_detector.api")
+# Client-supplied request IDs are echoed in a response header and written to logs, so
+# only short, plain tokens are accepted; anything else is replaced by a generated ID.
+_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9._:-]{1,128}")
+
+
+def _peak_rss_mib() -> float | None:
+    """Peak resident memory of this process (Linux/macOS; ``None`` on Windows).
+
+    Vercel's log records carry no memory figure, so the app reports its own.
+    """
+    try:
+        import resource
+    except ImportError:
+        return None
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Linux reports KiB, macOS bytes.
+    return round(peak / (2**20 if sys.platform == "darwin" else 2**10), 1)
 
 
 # ------------------------------------------------------------------------ logging
@@ -140,6 +158,7 @@ def _load_model(directory: Path) -> ModelState:
         sha256=loaded.sha256,
         features=loaded.artifact.feature_space.size,
         load_ms=round(state.load_seconds * 1000, 1),
+        peak_rss_mib=_peak_rss_mib(),
     )
     return state
 
@@ -225,7 +244,8 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def request_context(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+        supplied = request.headers.get("x-request-id", "")
+        request_id = supplied if _REQUEST_ID_RE.fullmatch(supplied) else uuid.uuid4().hex
         request.state.request_id = request_id
         start = time.perf_counter()
         try:
@@ -249,6 +269,7 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
                 path=request.url.path,
                 status=response.status_code,
                 duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                peak_rss_mib=_peak_rss_mib(),
                 **getattr(request.state, "log_fields", {}),
             )
         return response
@@ -331,6 +352,16 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
             spam_probability=probability,
             reason=result.reason,
             model_version=state.loaded.artifact.model_version,
+        )
+
+    @app.api_route("/predict", methods=["GET", "HEAD", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+    def predict_wrong_method() -> JSONResponse:
+        # Without this, the static-files mount at "/" fully matches GET /predict and
+        # answers 404, hiding the fact that the endpoint exists but needs POST.
+        return JSONResponse(
+            {"detail": {"type": "method_not_allowed", "msg": "Use POST with a JSON body."}},
+            status_code=405,
+            headers={"Allow": "POST"},
         )
 
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

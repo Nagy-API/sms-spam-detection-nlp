@@ -90,3 +90,10 @@ def test_vercel_bundle_excludes_training_material() -> None:
     runtime = (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
     for heavy in ("scikit-learn", "scipy", "numpy", "nltk", "joblib"):
         assert heavy not in runtime.split("#")[0] or f"\n{heavy}=" not in runtime
+
+
+def test_ci_runtime_guard_can_actually_fail() -> None:
+    # "! cmd" never fails a `bash -e` step; the guard must use an explicit exit.
+    workflow = (PROJECT_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "! python -c" not in workflow
+    assert "for module in sklearn numpy scipy nltk joblib" in workflow and "exit 1" in workflow

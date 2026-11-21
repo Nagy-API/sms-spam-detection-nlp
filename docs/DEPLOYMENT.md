@@ -60,6 +60,35 @@ While signed in to Vercel on the protected URL:
    message text**, and no 5xx.
 6. Record first-request and repeat-request timings to compare with Phase 1 (6.7 s first `/health`).
 
+## Hosted verification record (2026-11-21)
+
+| | |
+|---|---|
+| Deployment | `dpl_2muFmc4eoxsYf5ab2MAEmFVrCS2h` · `sms-spam-detection-cy2ze51cb-nagy-apis-projects.vercel.app` |
+| Commit | `cc8557247cd4f252d07bd2571b067f039d242673` (`phase-2/ml-engineering`) |
+| Classification | API `target: null` (Preview), `readySubstate: STAGED`; `vercel inspect` → `target preview`; project targets: `preview` only; no aliases; zero Production deployments |
+| Protection | Anonymous requests → 302 to Vercel SSO |
+| Model | `/ready` → v2.0.0, sha256 `5f79aee6…f34a`; 2 cold starts logged `load_ms` 77–79 |
+| API | 34/35 scripted checks passed; the failure (`GET /predict` → 404 instead of 405) was fixed in a follow-up commit and re-verified on a second Preview |
+| Browser | 19/19 Playwright tests against the hosted URL (incl. 390/768/1440 px, no CSP violations) |
+| Logs | 0 error-level entries, 0 5xx; privacy canary (a fake PIN) absent from all logs |
+| Latency | First request 2.0 s end-to-end (Phase 1: 6.7 s); server-side `/predict` p50 2.3 ms, p95 9.0 ms; client warm round-trip ≈ 0.35–0.45 s from the test machine to `iad1` (network-dominated) |
+
+The re-verification deployment of the fix commit is recorded in PR #3.
+
+### Running the checks against a protected Preview
+
+`npx vercel@59.23.2 curl <url>/health --scope nagy-apis-projects` authenticates through Deployment
+Protection. **On first use it creates a project-level "Protection Bypass for Automation" secret**
+(Settings → Deployment Protection). Anyone holding that secret can bypass protection, so revoke it
+after testing if it is not needed. To run the browser suite against a Preview:
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL = "https://<preview-host>"
+$env:VERCEL_AUTOMATION_BYPASS_SECRET = "<secret from the project settings>"
+npm --prefix tests/browser test
+```
+
 ## Rollback / recovery
 
 * The Phase 1 Preview (`dpl_AUNN1zDzoCR3m8DVjpyvev9kgUnT`, commit `616665d`) is untouched by this

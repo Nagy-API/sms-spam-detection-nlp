@@ -46,9 +46,13 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r requirements.txt
       - name: Training libraries must be absent
+        # Note: a negated command ("! cmd") can never fail a "bash -e" step, so test explicitly.
         run: |
-          ! python -c "import sklearn" 2>/dev/null
-          ! python -c "import numpy" 2>/dev/null
+          for module in sklearn numpy scipy nltk joblib; do
+            if python -c "import $module" 2>/dev/null; then
+              echo "::error::$module is installed but must not be a runtime dependency"; exit 1
+            fi
+          done
       - name: Serve and query the API
         run: |
           python -m uvicorn app.main:app --port 8000 &

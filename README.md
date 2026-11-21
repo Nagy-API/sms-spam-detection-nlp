@@ -94,11 +94,11 @@ an artifact, and `evaluate` (locked test set) requires an explicit flag and logs
 ## Tests
 
 ```powershell
-python -m pytest --cov=spam_detector --cov=app          # 143 tests; dataset-gated ones skip without data/spam.csv
+python -m pytest --cov=spam_detector --cov=app          # 157 tests; dataset-gated ones skip without data/spam.csv
 python -m ruff check .
 npm --prefix tests/browser ci
 npm --prefix tests/browser exec -- playwright install chromium
-npm --prefix tests/browser test                          # 16 browser regressions
+npm --prefix tests/browser test                          # 19 browser regressions
 ```
 
 Coverage includes featurizer parity with scikit-learn, export equivalence for LR/SVM/NB, artifact
@@ -137,7 +137,7 @@ Vercel, one Python function, no build step. Runbook, safeguards, and hosted chec
 | Responsible output | Abstained only on zero features | Abstains on no letters, non-Latin script, or unknown words, with a reason |
 | Artifact | Pickles tied to one scikit-learn version | Checksummed JSON, byte-for-byte reproducible, compatibility-checked |
 | Serving | 207 MiB bundle, NLTK download at build | 20 MiB, FastAPI only, readiness/model endpoints, privacy-safe logs, body limits, CSP |
-| Engineering | 8 API tests | 143 Python tests + 16 browser tests, CI, ADRs, model card |
+| Engineering | 8 API tests | 157 Python tests + 19 browser tests, CI, ADRs, model card |
 
 ## Dataset and license
 

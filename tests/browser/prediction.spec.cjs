@@ -207,3 +207,22 @@ test("the textbox has a label, description and visible keyboard focus on narrow 
   await expect(textbox).toHaveCSS("outline-style", "solid");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });
+
+for (const [width, height] of [[390, 844], [768, 1024], [1440, 900]]) {
+  test(`${width}px: full flow without overflow, page errors or CSP violations`, async ({ page }) => {
+    const problems = [];
+    page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
+    page.on("console", (message) => {
+      if (message.type() === "error") problems.push(`console: ${message.text()}`);
+    });
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await page.getByRole("textbox").fill(SPAM);
+    await analyze(page);
+    await expect(page.locator("#resultCard")).toContainText("Likely Spam");
+    await page.locator("#resultCard").scrollIntoViewIfNeeded();
+    await expect(page.locator("#resultCard")).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    expect(problems).toEqual([]);
+  });
+}
