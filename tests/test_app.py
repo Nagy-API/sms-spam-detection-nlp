@@ -30,12 +30,36 @@ class ApiTests(unittest.TestCase):
         for text, label, probability in (
             (HAM, "ham", 0.0005),
             (SPAM, "spam", 1.0),
-            ("12345", "ham", 0.1262),
         ):
             with self.subTest(text=text):
                 response = self.client.post("/predict", json={"text": text})
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json(), {"label": label, "spam_probability": probability})
+
+    def test_empty_whitespace_and_invalid_text_are_rejected(self):
+        for payload in ({}, {"text": 123}, {"text": ""}, {"text": " \t\n "}, {"text": "\u0085\u001c"}):
+            with self.subTest(payload=payload):
+                response = self.client.post("/predict", json=payload)
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["detail"][0]["loc"], ["body", "text"])
+
+    def test_text_length_limit_counts_unicode_code_points(self):
+        for padding in (" ", "🙂"):
+            with self.subTest(padding=padding):
+                text = HAM + padding * (5000 - len(HAM))
+                accepted = self.client.post("/predict", json={"text": text})
+                self.assertEqual(accepted.status_code, 200)
+                self.assertEqual(accepted.json(), {"label": "ham", "spam_probability": 0.0005})
+                rejected = self.client.post("/predict", json={"text": text + padding})
+                self.assertEqual(rejected.status_code, 422)
+                self.assertEqual(rejected.json()["detail"][0]["type"], "string_too_long")
+
+    def test_input_without_recognized_features_is_inconclusive(self):
+        for text in ("12345", "the and is", "https://example.com", "مرحبا", "qzxwvj"):
+            with self.subTest(text=text):
+                response = self.client.post("/predict", json={"text": text})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"label": "inconclusive", "spam_probability": None})
 
     def test_frontend_can_reach_prediction_at_the_same_origin(self):
         page = self.client.get("/")

@@ -1,6 +1,6 @@
 # SMS Spam Detection NLP
 
-This project classifies English SMS-style text as `spam` or `ham` (legitimate) and returns a spam probability. The local web interface, branded ShieldMail, accepts pasted text and `.txt` files. Its interface uses email terminology, while the training and evaluation data consists of SMS messages.
+ShieldSMS classifies English SMS messages as likely spam or likely ham (legitimate). The web interface accepts pasted messages and `.txt` files. It reports an inconclusive result when the model finds no recognized words or phrases.
 
 ## Project structure
 
@@ -29,7 +29,13 @@ python scripts/prepare_nltk.py
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open the [local interface](http://127.0.0.1:8000/). The same server provides `GET /health` and accepts `POST /predict` with a JSON `text` field. Predictions include `label` and `spam_probability`. The server loads the included joblib artifacts and local NLTK resources at startup. A missing artifact stops startup. [Interactive API documentation](http://127.0.0.1:8000/docs)
+Open the [local interface](http://127.0.0.1:8000/). The same server provides `GET /health` and accepts `POST /predict` with a JSON `text` field. The UI and API accept up to 5,000 Unicode code points, counting each emoji code point once. The server loads the included joblib artifacts and local NLTK resources at startup. A missing artifact stops startup. [Interactive API documentation](http://127.0.0.1:8000/docs)
+
+| HTTP status | Response |
+| --- | --- |
+| `200` | `label` is `ham` or `spam` and `spam_probability` is a number available for evaluation. The browser displays the label. |
+| `200` | `{"label":"inconclusive","spam_probability":null}` when the processed text has no recognized vocabulary features. |
+| `422` | FastAPI validation details for blank or whitespace-only text, text over the limit, a missing field, or an invalid type. |
 
 ## Tests
 
@@ -38,6 +44,14 @@ After preparing the NLTK resources, run these commands from the repository root.
 ```sh
 python -m pip install "httpx2==2.16.2"
 python -m unittest discover -s tests -v
+```
+
+With the Python environment still active, run the browser regressions from the repository root. Playwright starts the local FastAPI server on port 8765 and runs the suite in Chromium.
+
+```sh
+npm --prefix tests/browser ci
+npm --prefix tests/browser exec -- playwright install chromium
+npm --prefix tests/browser test
 ```
 
 ## Vercel preview

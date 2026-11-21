@@ -48,3 +48,7 @@ secrets.json
 # Generated Vercel build files and NLTK resources
 /.vercel/
 /nltk_data/
+
+# Browser test dependencies and output
+/tests/browser/node_modules/
+/tests/browser/test-results/

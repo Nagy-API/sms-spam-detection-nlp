@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ShieldMail — Email Spam Detector</title>
+<title>ShieldSMS — English SMS Spam Detector</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -20,7 +20,7 @@
         </linearGradient>
       </defs>
     </svg>
-    <span class="logo-text">Shield<span class="accent">Mail</span></span>
+    <span class="logo-text">Shield<span class="accent">SMS</span></span>
   </div>
 </header>
 
@@ -37,54 +37,50 @@
           <path d="m15.7 16 1.6 1.6 3-3.2" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <h1>Email Spam Detector</h1>
-      <p>Paste your email content below and let our NLP model classify it instantly.</p>
+      <h1>English SMS Spam Detector</h1>
+      <p>Check whether an English SMS message looks like spam.</p>
     </div>
 
-    <div class="card">
+    <form class="card" id="smsForm">
       <div class="card-header">
-        <div class="card-title"><span class="icon">✉</span> Email Content</div>
-        <div class="char-counter"><span id="charCount">0</span> / 5000</div>
+        <label class="card-title" for="smsText">SMS message</label>
+        <div class="char-counter"><span id="charCount">0</span> / 5,000</div>
       </div>
 
-      <label id="dropzone" for="fileInput" class="dropzone">
+      <p class="sr-only" id="smsInstructions">Paste an English SMS message or upload a .txt file. The limit is 5,000 characters.</p>
+      <div id="dropzone" class="dropzone">
         <input type="file" id="fileInput" accept=".txt" hidden />
-        <textarea id="emailText" maxlength="5000" placeholder=""></textarea>
-        <div class="dropzone-placeholder" id="dzPlaceholder">
+        <textarea id="smsText" aria-describedby="smsInstructions messageError"></textarea>
+        <div class="dropzone-placeholder" id="dzPlaceholder" aria-hidden="true">
           <div class="dz-icon">📄</div>
-          <div class="dz-title">Paste your email content here</div>
+          <div class="dz-title">Paste your SMS here</div>
           <div class="dz-sub">or drag &amp; drop a .txt file</div>
         </div>
-      </label>
+      </div>
+      <p class="form-error" id="messageError" role="alert"></p>
 
       <div class="card-actions">
         <button class="btn-ghost" id="uploadBtn" type="button">⭱ Upload .txt File</button>
         <button class="btn-ghost" id="clearBtn" type="button">🗑 Clear Content</button>
       </div>
 
-      <button class="btn-primary" id="analyzeBtn" type="button">✨ Analyze Email</button>
-    </div>
+      <button class="btn-primary" id="analyzeBtn" type="submit">Analyze SMS</button>
+      <div class="sr-only" id="analysisStatus" role="status" aria-atomic="true"></div>
+    </form>
 
-    <div class="card" id="resultCard" hidden>
+    <section class="card" id="resultCard" aria-labelledby="resultHeading" hidden>
       <div class="card-header">
-        <div class="card-title"><span class="icon">📈</span> Prediction Result</div>
+        <h2 class="card-title" id="resultHeading">Prediction result</h2>
       </div>
 
       <div class="result-box" id="resultBox">
-        <div class="result-icon" id="resultIcon"></div>
+        <div class="result-icon" id="resultIcon" aria-hidden="true"></div>
         <div class="result-body">
           <div class="result-label" id="resultLabel"></div>
           <div class="result-desc" id="resultDesc"></div>
-          <div class="confidence-row">
-            <span>Confidence Score</span>
-            <span id="confidenceValue"></span>
-          </div>
-          <div class="progress-track">
-            <div class="progress-fill" id="confidenceFill"></div>
-          </div>
         </div>
       </div>
-    </div>
+    </section>
 
   </section>
 
@@ -104,7 +100,6 @@
         <li><span class="check">✓</span> Text Cleaning</li>
         <li><span class="check">✓</span> BoW + Unigram + Bigram</li>
         <li><span class="check">✓</span> Naive Bayes Prediction</li>
-        <li><span class="check">✓</span> Probability Calculation</li>
       </ul>
     </div>
 
@@ -128,8 +123,8 @@
 
     <div class="card about-card">
       <div class="card-title"><span class="icon">ⓘ</span> About</div>
-      <p class="about-text">This app uses NLP and Machine Learning to detect spam emails with high accuracy.</p>
-      <div class="about-illustration">📧🔍</div>
+      <p class="about-text">The model was trained on labeled English SMS messages. Its predictions can be wrong.</p>
+      <div class="about-illustration" aria-hidden="true">💬🔍</div>
     </div>
 
   </aside>
@@ -137,7 +132,7 @@
 </main>
 
 <footer class="footer">
-  <span>© 2026 ShieldMail AI. All rights reserved.</span>
+  <span>© 2026 ShieldSMS. All rights reserved.</span>
 </footer>
 
 <script src="script.js"></script>

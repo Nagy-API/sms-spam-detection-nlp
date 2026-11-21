@@ -2,6 +2,7 @@ import re
 from contextlib import asynccontextmanager
 from functools import cache
 from pathlib import Path
+from typing import Annotated, Literal
 
 import joblib
 import nltk
@@ -9,11 +10,12 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VECTORIZER_PATH = PROJECT_ROOT / "models" / "vectorizer.pkl"
 MODEL_PATH = PROJECT_ROOT / "models" / "model.pkl"
+MAX_MESSAGE_CHARS = 5000
 
 nltk.data.path[:] = [str(PROJECT_ROOT / "nltk_data")]
 _lemmatizer = WordNetLemmatizer()
@@ -65,12 +67,24 @@ app = FastAPI(title="SMS Spam Detection API", lifespan=lifespan)
 
 
 class Message(BaseModel):
-    text: str
+    text: Annotated[str, Field(min_length=1, max_length=MAX_MESSAGE_CHARS)]
+
+    @field_validator("text")
+    @classmethod
+    def reject_blank_text(cls, text: str) -> str:
+        if not text.strip():
+            raise ValueError("Enter an SMS message.")
+        return text
 
 
 class Prediction(BaseModel):
-    label: str
+    label: Literal["spam", "ham"]
     spam_probability: float
+
+
+class InconclusivePrediction(BaseModel):
+    label: Literal["inconclusive"]
+    spam_probability: None
 
 
 @app.get("/health")
@@ -78,14 +92,16 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/predict", response_model=Prediction)
-def predict(message: Message, request: Request):
+@app.post("/predict", response_model=Prediction | InconclusivePrediction)
+def predict(message: Message, request: Request) -> Prediction | InconclusivePrediction:
     vectorizer = request.app.state.vectorizer
     model = request.app.state.model
     processed = preprocess_text(message.text)
     features = vectorizer.transform([processed])
+    if features.nnz == 0:
+        return InconclusivePrediction(label="inconclusive", spam_probability=None)
 
-    label = model.predict(features)[0]
+    label = str(model.predict(features)[0])
     proba = model.predict_proba(features)[0]
     spam_probability = proba[list(model.classes_).index("spam")]
 
