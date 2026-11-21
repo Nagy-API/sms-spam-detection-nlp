@@ -42,7 +42,7 @@ Compared with the v1 recipe retrained on the same split, v2 misses 5 instead of 
 messages and raises 0 instead of 4 false alarms.
 
 Runtime (standard library only): model load 0.05–0.19 s, 0.17 ms per typical SMS, ~5 ms at 5,000
-characters, ~12 MiB Python heap.
+characters, ~12 MiB Python heap for the model (63 MiB peak process RSS on Vercel, including the runtime).
 
 ## Data
 

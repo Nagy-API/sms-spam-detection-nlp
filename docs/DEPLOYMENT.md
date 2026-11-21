@@ -62,19 +62,29 @@ While signed in to Vercel on the protected URL:
 
 ## Hosted verification record (2026-11-21)
 
-| | |
-|---|---|
-| Deployment | `dpl_2muFmc4eoxsYf5ab2MAEmFVrCS2h` · `sms-spam-detection-cy2ze51cb-nagy-apis-projects.vercel.app` |
-| Commit | `cc8557247cd4f252d07bd2571b067f039d242673` (`phase-2/ml-engineering`) |
-| Classification | API `target: null` (Preview), `readySubstate: STAGED`; `vercel inspect` → `target preview`; project targets: `preview` only; no aliases; zero Production deployments |
-| Protection | Anonymous requests → 302 to Vercel SSO |
-| Model | `/ready` → v2.0.0, sha256 `5f79aee6…f34a`; 2 cold starts logged `load_ms` 77–79 |
-| API | 34/35 scripted checks passed; the failure (`GET /predict` → 404 instead of 405) was fixed in a follow-up commit and re-verified on a second Preview |
-| Browser | 19/19 Playwright tests against the hosted URL (incl. 390/768/1440 px, no CSP violations) |
-| Logs | 0 error-level entries, 0 5xx; privacy canary (a fake PIN) absent from all logs |
-| Latency | First request 2.0 s end-to-end (Phase 1: 6.7 s); server-side `/predict` p50 2.3 ms, p95 9.0 ms; client warm round-trip ≈ 0.35–0.45 s from the test machine to `iad1` (network-dominated) |
+Two protected Previews of the same model artifact were verified. Both were classified as Preview by
+the deployment API (`target: null`, `readySubstate: STAGED`) and by `vercel inspect`. Anonymous
+requests got a 302 to Vercel SSO. The project has only a `preview` target, no aliases, and zero
+Production deployments.
 
-The re-verification deployment of the fix commit is recorded in PR #3.
+| | Acceptance run | Fix re-verification |
+|---|---|---|
+| Deployment | `dpl_2muFmc4eoxsYf5ab2MAEmFVrCS2h` (`…-cy2ze51cb-…`) | `dpl_yue784Q8t1U57sVGsUqkdqnmEASC` (`…-lioe67vem-…`) |
+| Commit | `cc8557247cd4f252d07bd2571b067f039d242673` | `f42de90955ff5a2a71389ec1ef662ac1bc88255f` |
+| `/ready` model | v2.0.0, `5f79aee6…f34a` | v2.0.0, `5f79aee6…f34a` |
+| Scripted API check groups¹ | 24/25 (`GET /predict` → 404, fixed in `f42de90`) | **25/25** |
+| Playwright on hosted URL | 19/19 | **19/19** |
+| Cold starts in logs | 2, `load_ms` 77–79 | 3, `load_ms` 69–74, peak RSS 63 MiB |
+| Errors / 5xx / message text in logs | 0 / 0 / none | 0 / 0 / none |
+
+¹ Groups include 16 golden predictions (spam, ham, every abstention reason, Unicode), 8 sanitized
+422 inputs, 413 (including a chunked body), 405, the boundary cases at 5,000 code points, byte-identical
+static assets, all security headers, and the CSP.
+
+Latency: the first request after deployment took 2.0 s end-to-end (Phase 1: 6.7 s). Server-side
+`/predict` ran at p50 2.3 ms and p95 9.0 ms. The client's warm round trip was 0.35–0.45 s from
+the test machine to `iad1`, which is network-dominated. Peak process memory is 63–64 MiB,
+including the Python runtime and the loaded model.
 
 ### Running the checks against a protected Preview
 
