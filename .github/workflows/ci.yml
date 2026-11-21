@@ -28,7 +28,7 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - name: Lint
         run: python -m ruff check .
-      - name: Tests (dataset-dependent tests skip: the corpus is not redistributed)
+      - name: "Tests (dataset-dependent tests skip: the corpus is not redistributed)"
         run: python -m pytest --cov=spam_detector --cov=app --cov-report=term-missing:skip-covered
       - name: Verify the committed release artifact
         run: |
