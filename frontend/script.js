@@ -25,6 +25,14 @@ const OUTCOMES = {
   },
 };
 
+// Why the API abstained (`reason` field, see docs/API.md). Unknown or missing
+// reasons fall back to the generic inconclusive description above.
+const INCONCLUSIVE_REASONS = {
+  no_letters: "The message has no words to analyze.",
+  unsupported_script: "The model only supports English SMS written in the Latin alphabet.",
+  no_recognized_features: "The message contains no words or phrases the model recognizes.",
+};
+
 const form = document.getElementById("smsForm");
 const smsText = document.getElementById("smsText");
 const dzPlaceholder = document.getElementById("dzPlaceholder");
@@ -228,7 +236,7 @@ form.addEventListener("submit", async (event) => {
       showError(result.error, result.invalidInput);
       return;
     }
-    showResult(result.label);
+    showResult(result.label, result.reason);
   } catch {
     if (pendingPrediction === request) showError(NETWORK_ERROR);
   } finally {
@@ -239,8 +247,12 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-function showResult(label) {
-  const { title, description, icon } = OUTCOMES[label];
+function showResult(label, reason) {
+  const { title, icon } = OUTCOMES[label];
+  let { description } = OUTCOMES[label];
+  if (label === "inconclusive" && Object.hasOwn(INCONCLUSIVE_REASONS, reason)) {
+    description = INCONCLUSIVE_REASONS[reason];
+  }
   resultBox.className = "result-box " + label;
   resultIcon.textContent = icon;
   resultLabel.textContent = title;

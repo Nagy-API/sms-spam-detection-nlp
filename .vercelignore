@@ -2,7 +2,14 @@
 /nltk_data/
 /notebook/
 /tests/
+/reports/
+/docs/
+/models/legacy-v1/
+/spam_detector/training/
+/requirements-train.txt
+/requirements-dev.txt
 /.claude/
+/.github/
 .env
 .env.*
 *.log

@@ -78,7 +78,7 @@ def _metric_row(name: str, m: dict[str, Any], ci: dict[str, list[float]]) -> str
     )
 
 
-def test_markdown(report: dict[str, Any]) -> str:
+def locked_test_markdown(report: dict[str, Any]) -> str:
     selected = report["selected_model"]
     lines = [
         "# Locked test-set evaluation",

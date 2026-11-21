@@ -1,14 +1,15 @@
-"""Install the exact NLTK resources used for inference at build time."""
+"""Install the exact, checksum-verified NLTK resources used by the legacy v1 baseline.
+
+Only needed to reproduce the v1 baseline offline (``python -m spam_detector audit-legacy`` and the
+``legacy_nltk_nb`` experiment candidate). The v2 API does not use NLTK.
+"""
 
 from argparse import ArgumentParser
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from shutil import rmtree
-from sysconfig import get_path
 from urllib.request import urlopen
 from zipfile import ZipFile
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 NLTK_DATA_DIR = PROJECT_ROOT / "nltk_data"
@@ -47,22 +48,6 @@ def prepare_nltk():
         print(f"Prepared {archive}", flush=True)
 
 
-def trim_dependency_tests():
-    site_packages = Path(get_path("purelib")).resolve()
-    if not site_packages.is_relative_to(PROJECT_ROOT / ".vercel" / "python"):
-        raise RuntimeError("Dependency trimming requires Vercel's isolated build environment.")
-
-    # These directories contain upstream test suites and fixtures, separate from library code.
-    for package in ("numpy", "scipy", "sklearn"):
-        for directory in (site_packages / package).rglob("tests"):
-            if directory.is_dir() and directory.resolve().is_relative_to(site_packages / package):
-                rmtree(directory)
-
-
 if __name__ == "__main__":
-    parser = ArgumentParser(description=__doc__)
-    parser.add_argument("--vercel-build", action="store_true", help="Also trim upstream dependency tests.")
-    args = parser.parse_args()
+    ArgumentParser(description=__doc__).parse_args()
     prepare_nltk()
-    if args.vercel_build:
-        trim_dependency_tests()

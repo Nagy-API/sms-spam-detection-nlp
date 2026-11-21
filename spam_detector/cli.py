@@ -89,14 +89,14 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
         )
     from spam_detector.training.experiment import prepare_data, write_json
     from spam_detector.training.release import evaluate_locked_test
-    from spam_detector.training.report import test_markdown
+    from spam_detector.training.report import locked_test_markdown
 
     config = PipelineConfig.load(args.config)
     report = evaluate_locked_test(
         config, prepare_data(config), Path(args.artifact), REPORTS / "evaluation" / "test_access_log.jsonl"
     )
     write_json(REPORTS / "evaluation" / "test_report.json", report)
-    (REPORTS / "evaluation" / "test_report.md").write_text(test_markdown(report), encoding="utf-8")
+    (REPORTS / "evaluation" / "test_report.md").write_text(locked_test_markdown(report), encoding="utf-8")
     _print(report["selected_model"]["metrics"])
 
 

@@ -1,3 +1,5 @@
+# Runtime dependencies of the API (installed by Vercel). Standard-library model runtime:
+# scikit-learn, SciPy, NumPy, NLTK and joblib are NOT needed to serve predictions.
 annotated-doc==0.0.7
 annotated-types==0.8.0
 anyio==4.16.0
@@ -6,17 +8,9 @@ colorama==0.4.6; sys_platform == "win32"
 fastapi==0.136.1
 h11==0.16.0
 idna==3.20
-joblib==1.5.3
-nltk==3.9.4
-numpy==2.4.2
 pydantic==2.13.3
 pydantic-core==2.46.3
-regex==2026.11.19
-scikit-learn==1.8.0
-scipy==1.17.0
 starlette==1.10.0
-threadpoolctl==3.8.0
-tqdm==4.70.1
 typing-extensions==4.16.0
 typing-inspection==0.4.5
 uvicorn==0.46.0

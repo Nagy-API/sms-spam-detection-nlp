@@ -66,6 +66,29 @@ test("zero-feature SMS is announced as inconclusive", async ({ page }) => {
   await expect(page.getByRole("status")).toContainText("Inconclusive");
 });
 
+for (const [text, reason, explanation] of [
+  ["12345", "no_letters", /no words to analyze/i],
+  ["مرحبا كيف حالك", "unsupported_script", /only supports English SMS/i],
+  ["qzxwvj", "no_recognized_features", /no words or phrases the model recognizes/i],
+]) {
+  test(`inconclusive ${reason} is explained to the user`, async ({ page }) => {
+    await page.getByRole("textbox").fill(text);
+    const response = page.waitForResponse("/predict");
+    await analyze(page);
+    const body = await (await response).json();
+    expect(body).toEqual({ label: "inconclusive", spam_probability: null, reason, model_version: "2.0.0" });
+    await expect(page.locator("#resultCard")).toContainText("Inconclusive");
+    await expect(page.locator("#resultCard")).toContainText(explanation);
+  });
+}
+
+test("unknown inconclusive reasons fall back to the generic explanation", async ({ page }) => {
+  await page.route("/predict", (route) => route.fulfill({ json: { label: "inconclusive", spam_probability: null, reason: "future_reason" } }));
+  await page.getByRole("textbox").fill(HAM);
+  await analyze(page);
+  await expect(page.locator("#resultCard")).toContainText(/no words or phrases the model recognizes/i);
+});
+
 test("blank and over-limit text are blocked before a request", async ({ page }) => {
   const requests = [];
   page.on("request", (request) => {
