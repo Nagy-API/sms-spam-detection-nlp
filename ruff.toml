@@ -1,0 +1,7 @@
+line-length = 140
+target-version = "py312"
+extend-exclude = ["notebook", ".vercel", "tests/browser/node_modules", "nltk_data"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # intentional Unicode (£, curly quotes) in SMS-related text

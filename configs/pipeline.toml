@@ -1,0 +1,139 @@
+# Experiment and release configuration. Every number in reports/ traces back to this file.
+# Changing anything here changes results: commit the config together with the reports it produced.
+
+[data]
+path = "data/spam.csv"
+# SHA-256 of the Kaggle "SMS Spam Collection Dataset" spam.csv used for every recorded result.
+sha256 = "440e6ea9fa825578abfdd7b7932ef8393d72ef86c0c33f64676705ce40b1dfc2"
+# Character 5-gram Jaccard similarity at or above which two messages are the same "group".
+# 0.5 was chosen by inspecting linked pairs: even the 0.5-0.6 band links variants of one
+# spam campaign, and no group mixes labels (see docs/EVALUATION.md).
+near_duplicate_jaccard = 0.5
+
+[split]
+seed = 20261121
+test_fraction = 0.2
+
+[cross_validation]
+folds = 5
+repeats = 3
+seed = 7
+
+[decision]
+# Product assumption: wrongly flagging a legitimate SMS (a bank code, a message from family)
+# costs three times as much as letting one spam through. With calibrated probabilities the
+# cost-minimizing threshold is C_FP / (C_FP + C_FN) = 0.75.
+false_positive_cost = 3.0
+false_negative_cost = 1.0
+
+[selection]
+# Lower is better. Candidates whose mean CV cost is within one standard error of the best
+# are considered statistically tied, and the cheapest to serve (fewest features) wins.
+metric = "expected_cost_per_message"
+rule = "one_standard_error"
+
+[release]
+# "auto" = the candidate chosen by the selection rule in reports/experiments/cv_results.json.
+candidate = "auto"
+model_version = "2.0.0"
+output_dir = "models/spam-v2"
+min_latin_letter_ratio = 0.5
+
+# --------------------------------------------------------------------------- candidates
+# Shared block definitions are repeated inline on purpose: each candidate reads standalone.
+
+[[candidates]]
+name = "legacy_nltk_nb"
+classifier = "legacy_nltk_nb"
+description = "Original v1 system: NLTK clean/stop-words/POS-lemmatize, word 1-2 gram counts, Multinomial NB"
+
+[[candidates]]
+name = "nb_word12_counts"
+classifier = "multinomial_nb"
+description = "v2 normalization, word 1-2 gram counts, Multinomial NB (alpha=0.1)"
+params = { alpha = 0.1 }
+blocks = [ { analyzer = "word", ngram_range = [1, 2], weighting = "count", sublinear_tf = false, l2_normalize = false } ]
+
+[[candidates]]
+name = "nb_word12_char25_counts"
+classifier = "multinomial_nb"
+description = "v2 normalization, word 1-2 + char_wb 2-5 counts, Multinomial NB (alpha=0.1)"
+params = { alpha = 0.1 }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2], weighting = "count", sublinear_tf = false, l2_normalize = false },
+  { analyzer = "char_wb", ngram_range = [2, 5], weighting = "count", sublinear_tf = false, l2_normalize = false, min_df = 2 },
+]
+
+[[candidates]]
+name = "lr_word12"
+classifier = "logistic_regression"
+description = "word 1-2 gram TF-IDF, logistic regression C=10"
+params = { C = 10.0 }
+blocks = [ { analyzer = "word", ngram_range = [1, 2] } ]
+
+[[candidates]]
+name = "lr_char25"
+classifier = "logistic_regression"
+description = "char_wb 2-5 gram TF-IDF, logistic regression C=10"
+params = { C = 10.0 }
+blocks = [ { analyzer = "char_wb", ngram_range = [2, 5], min_df = 2 } ]
+
+[[candidates]]
+name = "lr_word12_char25"
+classifier = "logistic_regression"
+description = "word 1-2 + char_wb 2-5 TF-IDF, logistic regression C=10"
+params = { C = 10.0 }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2] },
+  { analyzer = "char_wb", ngram_range = [2, 5], min_df = 2 },
+]
+
+[[candidates]]
+name = "lr_word12_char25_c1"
+classifier = "logistic_regression"
+description = "as lr_word12_char25 with stronger regularization (C=1)"
+params = { C = 1.0 }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2] },
+  { analyzer = "char_wb", ngram_range = [2, 5], min_df = 2 },
+]
+
+[[candidates]]
+name = "lr_word12_char25_balanced"
+classifier = "logistic_regression"
+description = "as lr_word12_char25 with class_weight=balanced"
+params = { C = 10.0, class_weight = "balanced" }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2] },
+  { analyzer = "char_wb", ngram_range = [2, 5], min_df = 2 },
+]
+
+[[candidates]]
+name = "svm_word12_char25"
+classifier = "linear_svm"
+description = "word 1-2 + char_wb 2-5 TF-IDF, linear SVM C=1"
+params = { C = 1.0 }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2] },
+  { analyzer = "char_wb", ngram_range = [2, 5], min_df = 2 },
+]
+
+[[candidates]]
+name = "svm_word12_char25_balanced"
+classifier = "linear_svm"
+description = "as svm_word12_char25 with class_weight=balanced"
+params = { C = 1.0, class_weight = "balanced" }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2] },
+  { analyzer = "char_wb", ngram_range = [2, 5], min_df = 2 },
+]
+
+[[candidates]]
+name = "lr_word12_char36"
+classifier = "logistic_regression"
+description = "word 1-2 + char_wb 3-6 TF-IDF, logistic regression C=10"
+params = { C = 10.0 }
+blocks = [
+  { analyzer = "word", ngram_range = [1, 2] },
+  { analyzer = "char_wb", ngram_range = [3, 6], min_df = 2 },
+]
