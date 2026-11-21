@@ -56,14 +56,27 @@ npm --prefix tests/browser test
 
 ## Vercel preview
 
-From a clean checkout of the branch you want to preview, run the following commands at the repository root. Sign in and select or create the intended Vercel project when prompted. The project uses the FastAPI framework preset and requires no environment variables.
+Use the existing `nagy-apis-projects/sms-spam-detection-nlp` project (`prj_di0asm5YAbI4JjCrvYS46lE3hYLd`). Vercel can assign the first deployment of a new project to Production even when the CLI requests Preview. Stop if the team or project differs, the project has no prior completed deployment, or Preview deployment protection is disabled. Provisioning a new project requires a separate decision. [Vercel first-deployment guidance](https://github.com/vercel/vercel-plugin/blob/main/commands/deploy.md)
+
+From the repository root, check the branch, commit and working tree. Confirm that the authenticated CLI account has access to the team, then open the exact project in the dashboard and verify that a previous protected Preview is Ready. The project uses the FastAPI framework preset and requires no application environment variables.
 
 ```sh
-npx vercel@59.23.2 login
-npx vercel@59.23.2 deploy --target=preview
+git status --short --branch
+git rev-parse HEAD
+npx vercel@59.23.2 whoami
+npx vercel@59.23.2 teams ls
 ```
 
-On the preview URL, check `/health`, then submit one normal and one spam message from `/`. Confirm the browser sends `POST /predict` to the preview origin and displays both results. Check the build and function logs for startup errors and review cold invocation timing. Use the preview URL for these checks. [Vercel Preview environments](https://vercel.com/docs/deployments/environments#preview-environment-pre-production)
+The **Auto-assign Custom Production Domains** setting can be temporarily disabled as an extra safeguard against assigning Production aliases. It controls alias assignment only. Phase 1 also tested a `--local-config` build guard, but Vercel used the build command committed in `vercel.json`. If a build-time environment guard is required, review and commit it in the effective project configuration before uploading. [Vercel deployment controls](https://vercel.com/docs/deployments/managing-deployments) · [Vercel project configuration](https://vercel.com/docs/project-configuration/vercel-json)
+
+Deploy with the target, scope and project pinned. Replace `DEPLOYMENT_ID` with the returned ID and inspect it immediately. Confirm the dashboard says **Preview** and the deployment metadata records the expected Git commit before waiting for Ready. A `null` target in the deployment API denotes standard Preview. If Vercel reports **Production** or the environment cannot be confirmed, stop, cancel any ongoing build in the dashboard and report the deployment ID. After a confirmed Preview, restore the original domain setting if it was changed and check for unexpected Production deployments or aliases. [Vercel CLI deploy](https://vercel.com/docs/cli/deploy) · [Vercel Preview environments](https://vercel.com/docs/deployments/environments#preview-environment-pre-production)
+
+```sh
+npx vercel@59.23.2 deploy --target=preview --scope nagy-apis-projects --project prj_di0asm5YAbI4JjCrvYS46lE3hYLd --no-wait --non-interactive
+npx vercel@59.23.2 inspect DEPLOYMENT_ID --scope nagy-apis-projects --json
+```
+
+Open the unique deployment URL while signed in to Vercel. Check `/health`, the frontend assets, and real ham, spam and inconclusive predictions from `/`. Confirm that the browser uses the same-origin `POST /predict` and that the API returns `422` for blank and oversized text. Use the deployment's Build Logs and Runtime Logs to check function startup and record first and repeat request timings. [Vercel Authentication](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication)
 
 Vercel builds one Python 3.12 function from `app/main.py` and serves the frontend from the same origin. The build downloads and verifies four upstream NLTK archives and bundles the required resources, including the English Punkt tables, alongside the two existing model files. The build strips NumPy, SciPy, and scikit-learn's upstream test directories from its disposable build environment to fit the function bundle. The deployment excludes the SMS training dataset, notebook, project tests, and offline training script. [Vercel FastAPI guide](https://vercel.com/docs/frameworks/backend/fastapi) · [Python runtime](https://vercel.com/docs/functions/runtimes/python)
 
