@@ -1,0 +1,52 @@
+{
+  "calibration": {
+    "a": 6.2172761030676265,
+    "b": 0.6527265517864298,
+    "fitted_on": "5-fold group CV out-of-fold scores",
+    "method": "platt"
+  },
+  "candidate": {
+    "classifier": "linear_svm",
+    "description": "as svm_word12_char25 with class_weight=balanced",
+    "name": "svm_word12_char25_balanced",
+    "params": {
+      "C": 1.0,
+      "class_weight": "balanced"
+    }
+  },
+  "created_at": "2026-11-21T19:53:42+00:00",
+  "dataset": {
+    "sha256": "440e6ea9fa825578abfdd7b7932ef8393d72ef86c0c33f64676705ce40b1dfc2",
+    "split_fingerprint": "221cdf6b89901463bba5ff237b68ef64fa0693e8fbc5b853b79ccee64b9c6077"
+  },
+  "decision": {
+    "false_negative_cost": 1.0,
+    "false_positive_cost": 3.0,
+    "rule": "flag as spam when calibrated P(spam) >= C_FP / (C_FP + C_FN)",
+    "threshold": 0.75
+  },
+  "environment": {
+    "config_sha256": "1c6206df50dc0629a3fc0caee6d325bb04bd67020bffaf623caa16e4784c3c50",
+    "git_commit": "c40eae8c606574a7017164e3c7e6c05ade0942dc",
+    "git_dirty_code_or_config": false,
+    "numpy": "2.4.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "scikit_learn": "1.8.0",
+    "scipy": "1.17.0"
+  },
+  "intended_use": "Screening English SMS for likely spam. Not a safety or fraud guarantee.",
+  "model_sha256": "eda8a83e6124a93f9d70f45aaab2908aee7d91213d1a0260c928eeef7fe1f92b",
+  "model_version": "2.0.0",
+  "parity_with_scikit_learn": {
+    "max_abs_score_difference": 6.217248937900877e-15,
+    "messages": 4125
+  },
+  "training": {
+    "fit_seconds": 0.918,
+    "messages": 4125,
+    "n_features": 70091,
+    "spam": 513,
+    "split": "development"
+  }
+}

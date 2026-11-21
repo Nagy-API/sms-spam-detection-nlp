@@ -1,0 +1,73 @@
+{
+  "reproduced_split": {
+    "train": 4135,
+    "test": 1034,
+    "test_spam": 131
+  },
+  "zero_feature_test_messages": 4,
+  "leakage": {
+    "test_with_case_or_whitespace_duplicate_in_train": 6,
+    "test_with_same_template_in_train": 20,
+    "test_with_near_duplicate_in_train": 85,
+    "spam_test_with_near_duplicate_in_train": 61,
+    "jaccard_threshold": 0.5
+  },
+  "v1_artifact_on_v1_holdout": {
+    "accuracy": 0.9845261121856866,
+    "spam_precision": 0.96,
+    "spam_recall": 0.916030534351145,
+    "spam_f1": 0.9375,
+    "macro_f1": 0.9643349889624724,
+    "balanced_accuracy": 0.9552467178953954,
+    "mcc": 0.9290078718605416,
+    "false_positive_rate": 0.005537098560354375,
+    "pr_auc": 0.9609283269598499,
+    "roc_auc": 0.9801087131106659,
+    "false_positives": 5,
+    "false_negatives": 11,
+    "expected_cost_per_message": 0.015473887814313346,
+    "confusion_matrix": [
+      [
+        898,
+        5
+      ],
+      [
+        11,
+        120
+      ]
+    ],
+    "brier": 0.013663070745316643,
+    "log_loss": 0.08483974198306035,
+    "ece": 0.009324114147784288
+  },
+  "v1_artifact_on_v1_holdout_without_near_duplicates": {
+    "messages": 949,
+    "spam": 70,
+    "accuracy": 0.9831401475237092,
+    "spam_precision": 0.921875,
+    "spam_recall": 0.8428571428571429,
+    "spam_f1": 0.8805970149253731,
+    "macro_f1": 0.9357633600703963,
+    "balanced_accuracy": 0.9185844303591744,
+    "mcc": 0.8725591984561459,
+    "false_positive_rate": 0.005688282138794084,
+    "pr_auc": 0.9083449596711477,
+    "roc_auc": 0.9628473915163335,
+    "false_positives": 5,
+    "false_negatives": 11,
+    "expected_cost_per_message": 0.01685985247629083,
+    "confusion_matrix": [
+      [
+        874,
+        5
+      ],
+      [
+        11,
+        59
+      ]
+    ],
+    "brier": 0.014863716708411027,
+    "log_loss": 0.09216098717625416,
+    "ece": 0.010158417753319977
+  }
+}
