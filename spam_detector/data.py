@@ -7,7 +7,7 @@ The raw file has three defects that the legacy pipeline silently inherited:
    kept only ``v2`` and therefore trained on truncated text. We rejoin them.
 2. **Double-encoded characters (mojibake).** The text was UTF-8, decoded as
    Windows-1252, and re-encoded as Mac Roman. ``£`` is stored as the bytes
-   ``E5 A3`` and ``'`` as ``89 DB F7``. A model trained on that never sees a
+   ``E5 A3`` and ``’`` as ``89 DB AA``. A model trained on that never sees a
    real ``£``, which is what users type. Each run of non-ASCII bytes is
    reversed with ``mac_roman -> cp1252 -> utf-8`` when that round-trip is
    valid; runs that cannot be reversed unambiguously are kept as Mac Roman

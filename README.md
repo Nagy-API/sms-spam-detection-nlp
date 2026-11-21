@@ -1,97 +1,148 @@
-# SMS Spam Detection NLP
+# SMS Spam Detection: a reproducible, leakage-aware NLP system
 
-ShieldSMS classifies English SMS messages as likely spam or likely ham (legitimate). The web interface accepts pasted messages and `.txt` files. It reports an inconclusive result when the model finds no recognized words or phrases.
+Classifies **English SMS** as *likely spam*, *likely ham* (legitimate), or *inconclusive*, with a
+calibrated spam probability. Behind a small web UI sits an evaluation pipeline built to be trusted:
+near-duplicate-aware splits, a locked and logged test set, cost-based decisions, and a model
+artifact that rebuilds byte for byte and is served without scikit-learn, NumPy, or pickle.
 
-## Project structure
+> **Scope.** The model screens SMS for patterns seen in the 2011 SMS Spam Collection. It does
+> **not** certify a message as safe, detect phishing or fraud in general, or classify e-mail.
+> See the [model card](docs/MODEL_CARD.md).
 
-| Path | Purpose |
-| --- | --- |
-| `app/main.py` | FastAPI service. It cleans and tokenizes text, removes English stop words, and lemmatizes tokens using NLTK. A unigram and bigram `CountVectorizer` feeds a multinomial Naive Bayes classifier. |
-| `frontend/` | Static HTML, CSS, and JavaScript that calls the same-origin API. |
-| `models/` | Project-generated scikit-learn classifier and vectorizer, saved with joblib. |
-| `notebook/sms_spam_detection.ipynb` | Data exploration, preprocessing, training experiments, and evaluation on the SMS dataset. |
-| `requirements.txt` | Python dependencies for the API. |
+## Results
 
-## Install and run locally
+Leakage-controlled evaluation ([full report](docs/EVALUATION.md)). The v1 recipe is the original
+project's pipeline (NLTK preprocessing, word counts, Naive Bayes), retrained on exactly the same
+data for a fair comparison.
 
-Use Python 3.12. From the repository root, create and activate a virtual environment.
+| | v1 recipe | **v2 (this model)** |
+|---|---|---|
+| Spam F1, 15-fold group CV (development) | 0.861 ± 0.044 | **0.949 ± 0.014** |
+| Spam recall, CV | 0.761 | **0.913** |
+| Expected cost / message, CV (false alarm = 3× a miss) | 0.0312 | **0.0149** (−52%) |
+| Locked test: spam F1 [95% CI] | 0.914 [0.874, 0.948] | **0.980** [0.961, 0.996] |
+| Locked test: missed spam / false alarms (of 128 / 903) | 17 / 4 | **5 / 0** |
+| Locked test: PR-AUC | 0.959 | **0.994** |
+| Serverless function bundle | 207 MiB | **20 MiB** |
+| Prediction latency (typical SMS) | n/a | **0.17 ms** |
+
+Treat the CV numbers as the planning estimate. The test set is held out but internal (same corpus
+and era), with 128 spam messages.
+
+**What the audit of the original project found:** 47% of the original holdout's spam messages had
+a near-duplicate in its training data. On the leak-free part, the original model's spam recall was
+0.84, not the reported 0.92 ([details](docs/EVALUATION.md#2-how-trustworthy-were-the-v1-numbers-python--m-spam_detector-audit-legacy)).
+
+## How it works
+
+```
+text ─► abstain? (no letters / non-Latin / no known word) ─► normalize (NFKC, lowercase, mask URLs
+     and numbers as zzurl / zzphone / zzcode / zznum) ─► word 1–2-grams + char 2–5-grams, TF-IDF
+     ─► linear SVM score ─► Platt calibration ─► P(spam) ≥ 0.75 ? spam : ham
+```
+
+* **One preprocessing implementation** shared by training and serving ([ADR 0003](docs/adr/0003-preprocessing.md)).
+* **Group-aware evaluation:** exact and near-duplicate campaigns never straddle a split ([ADR 0001](docs/adr/0001-evaluation-protocol.md)).
+* **Model selection by expected cost** with a pre-registered one-standard-error rule over 11 candidates ([ADR 0002](docs/adr/0002-model-selection.md)).
+* **Pickle-free, checksummed JSON artifact** executed by ~475 lines of standard-library Python, verified against scikit-learn to 6e-15 ([ADR 0004](docs/adr/0004-pickle-free-artifact.md)).
+* **Explicit abstention** with machine-readable reasons ([ADR 0005](docs/adr/0005-abstention.md)).
+
+Architecture and module map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Quick start (run the app)
+
+Python 3.12. The release artifact is committed, so serving needs no dataset and no ML libraries.
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-On macOS or Linux, activate it with `source .venv/bin/activate`. Install the pinned dependencies and prepare the pinned NLTK resources once before starting the app. The saved artifacts were serialized with scikit-learn 1.8.0.
-
-```sh
+.\.venv\Scripts\Activate.ps1          # macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
-python scripts/prepare_nltk.py
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open the [local interface](http://127.0.0.1:8000/). The same server provides `GET /health` and accepts `POST /predict` with a JSON `text` field. The UI and API accept up to 5,000 Unicode code points, counting each emoji code point once. The server loads the included joblib artifacts and local NLTK resources at startup. A missing artifact stops startup. [Interactive API documentation](http://127.0.0.1:8000/docs)
+Open <http://127.0.0.1:8000/>. API docs at `/docs`.
 
-| HTTP status | Response |
-| --- | --- |
-| `200` | `label` is `ham` or `spam` and `spam_probability` is a number available for evaluation. The browser displays the label. |
-| `200` | `{"label":"inconclusive","spam_probability":null}` when the processed text has no recognized vocabulary features. |
-| `422` | FastAPI validation details for blank or whitespace-only text, text over the limit, a missing field, or an invalid type. |
+```powershell
+curl.exe -s -X POST http://127.0.0.1:8000/predict -H "content-type: application/json" -d '{\"text\":\"WINNER!! Claim your prize, call 09061701461\"}'
+# {"label":"spam","spam_probability":0.9996,"reason":null,"model_version":"2.0.0"}
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /predict` | `{"text": "..."}` (1–5,000 code points) → `label`, `spam_probability`, `reason`, `model_version` |
+| `GET /health` · `GET /ready` | Liveness · readiness (verified model loaded) |
+| `GET /model` | Version, threshold, limits, evaluation summary and caveats |
+
+Full contract, error codes, and the frontend handoff: [docs/API.md](docs/API.md).
+
+## Train, evaluate, reproduce
+
+```powershell
+python -m pip install -r requirements-dev.txt
+# download spam.csv into data/ (instructions and checksum: docs/DATASET.md)
+python scripts/prepare_nltk.py                 # only to reproduce the v1 baseline
+python -m spam_detector data                   # repair, dedupe, group, split -> reports/data/
+python -m spam_detector audit-legacy           # quantify the original protocol's leakage
+python -m spam_detector experiment             # 11 candidates x 15 group-CV folds -> reports/experiments/
+python -m spam_detector reproduce              # rebuild models/spam-v2 and compare sha256
+python -m spam_detector explain "Free entry! Txt WIN to 87121"
+```
+
+All parameters live in [`configs/pipeline.toml`](configs/pipeline.toml). `release` never overwrites
+an artifact, and `evaluate` (locked test set) requires an explicit flag and logs every run.
 
 ## Tests
 
-After preparing the NLTK resources, run these commands from the repository root.
-
-```sh
-python -m pip install "httpx2==2.16.2"
-python -m unittest discover -s tests -v
-```
-
-With the Python environment still active, run the browser regressions from the repository root. Playwright starts the local FastAPI server on port 8765 and runs the suite in Chromium.
-
-```sh
+```powershell
+python -m pytest --cov=spam_detector --cov=app          # 143 tests; dataset-gated ones skip without data/spam.csv
+python -m ruff check .
 npm --prefix tests/browser ci
 npm --prefix tests/browser exec -- playwright install chromium
-npm --prefix tests/browser test
+npm --prefix tests/browser test                          # 16 browser regressions
 ```
 
-## Vercel preview
+Coverage includes featurizer parity with scikit-learn, export equivalence for LR/SVM/NB, artifact
+tampering and incompatibility, leakage assertions, golden predictions (Unicode, emoji, other
+scripts), the HTTP contract (413/422/503/500), privacy of logs, an import guard that keeps
+scikit-learn out of the API process, and an end-to-end pipeline run on synthetic data.
+CI (`.github/workflows/ci.yml`) runs lint and tests, an API smoke test with **only** the runtime
+dependencies installed, and the Playwright suite.
 
-Use the existing `nagy-apis-projects/sms-spam-detection-nlp` project (`prj_di0asm5YAbI4JjCrvYS46lE3hYLd`). Vercel can assign the first deployment of a new project to Production even when the CLI requests Preview. Stop if the team or project differs, the project has no prior completed deployment, or Preview deployment protection is disabled. Provisioning a new project requires a separate decision. [Vercel first-deployment guidance](https://github.com/vercel/vercel-plugin/blob/main/commands/deploy.md)
+## Deployment
 
-From the repository root, check the branch, commit and working tree. Confirm that the authenticated CLI account has access to the team, then open the exact project in the dashboard and verify that a previous protected Preview is Ready. The project uses the FastAPI framework preset and requires no application environment variables.
+Vercel, one Python function, no build step. Runbook, safeguards, and hosted checks:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Production deployment requires explicit owner approval.
 
-```sh
-git status --short --branch
-git rev-parse HEAD
-npx vercel@59.23.2 whoami
-npx vercel@59.23.2 teams ls
-```
+## Documentation
 
-The **Auto-assign Custom Production Domains** setting can be temporarily disabled as an extra safeguard against assigning Production aliases. It controls alias assignment only. Phase 1 also tested a `--local-config` build guard, but Vercel used the build command committed in `vercel.json`. If a build-time environment guard is required, review and commit it in the effective project configuration before uploading. [Vercel deployment controls](https://vercel.com/docs/deployments/managing-deployments) · [Vercel project configuration](https://vercel.com/docs/project-configuration/vercel-json)
+| Document | What it covers |
+|---|---|
+| [LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md) | Every component explained, plus interview questions with answers |
+| [EVALUATION.md](docs/EVALUATION.md) | Protocol, all results, error analysis, test-set access log |
+| [MODEL_CARD.md](docs/MODEL_CARD.md) | Intended use, limits, biases, performance |
+| [DATASET.md](docs/DATASET.md) | Provenance, license, acquisition, data-quality repairs |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System diagram, modules, request lifecycle, dependencies |
+| [API.md](docs/API.md) | HTTP contract and frontend integration guide |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Vercel build, preview runbook, rollback |
+| [docs/adr/](docs/adr/) | Six architecture decision records |
 
-Deploy with the target, scope and project pinned. Replace `DEPLOYMENT_ID` with the returned ID and inspect it immediately. Confirm the dashboard says **Preview** and the deployment metadata records the expected Git commit before waiting for Ready. A `null` target in the deployment API denotes standard Preview. If Vercel reports **Production** or the environment cannot be confirmed, stop, cancel any ongoing build in the dashboard and report the deployment ID. After a confirmed Preview, restore the original domain setting if it was changed and check for unexpected Production deployments or aliases. [Vercel CLI deploy](https://vercel.com/docs/cli/deploy) · [Vercel Preview environments](https://vercel.com/docs/deployments/environments#preview-environment-pre-production)
+## Improvements over the original project
 
-```sh
-npx vercel@59.23.2 deploy --target=preview --scope nagy-apis-projects --project prj_di0asm5YAbI4JjCrvYS46lE3hYLd --no-wait --non-interactive
-npx vercel@59.23.2 inspect DEPLOYMENT_ID --scope nagy-apis-projects --json
-```
+| Area | Before | After |
+|---|---|---|
+| Data | Truncated 50 messages, mojibake (`å£` for `£`), HTML entities, dataset-only `<#>` markers | Repaired and validated, with a fingerprinted dataset |
+| Evaluation | One random split, near-duplicate leakage, model chosen on the test set | Group-aware repeated CV, locked and logged test set, bootstrap CIs |
+| Preprocessing | Deleted digits, `£`, `!`, URLs. Notebook and API differed | One shared normalizer that keeps typed placeholders |
+| Model | Count NB, uncalibrated, 0.5 threshold | Word+char TF-IDF SVM, Platt-calibrated, cost-derived threshold |
+| Responsible output | Abstained only on zero features | Abstains on no letters, non-Latin script, or unknown words, with a reason |
+| Artifact | Pickles tied to one scikit-learn version | Checksummed JSON, byte-for-byte reproducible, compatibility-checked |
+| Serving | 207 MiB bundle, NLTK download at build | 20 MiB, FastAPI only, readiness/model endpoints, privacy-safe logs, body limits, CSP |
+| Engineering | 8 API tests | 143 Python tests + 16 browser tests, CI, ADRs, model card |
 
-Open the unique deployment URL while signed in to Vercel. Check `/health`, the frontend assets, and real ham, spam and inconclusive predictions from `/`. Confirm that the browser uses the same-origin `POST /predict` and that the API returns `422` for blank and oversized text. Use the deployment's Build Logs and Runtime Logs to check function startup and record first and repeat request timings. [Vercel Authentication](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication)
+## Dataset and license
 
-Vercel builds one Python 3.12 function from `app/main.py` and serves the frontend from the same origin. The build downloads and verifies four upstream NLTK archives and bundles the required resources, including the English Punkt tables, alongside the two existing model files. The build strips NumPy, SciPy, and scikit-learn's upstream test directories from its disposable build environment to fit the function bundle. The deployment excludes the SMS training dataset, notebook, project tests, and offline training script. [Vercel FastAPI guide](https://vercel.com/docs/frameworks/backend/fastapi) · [Python runtime](https://vercel.com/docs/functions/runtimes/python)
-
-## Dataset and retraining
-
-The included model files let the API run without the dataset. For retraining or running the notebook, download `spam.csv` from the [Kaggle SMS Spam Collection Dataset](https://www.kaggle.com/datasets/uciml/sms-spam-collection-dataset) and place it at `data/spam.csv`, creating `data/` if needed. The project expects the CSV's `v1` and `v2` columns and reads it as Latin-1. The exact CSV is kept local because the Kaggle listing does not identify a redistribution license and the messages include contact details.
-
-The original SMS Spam Collection is attributed to Tiago Almeida and Jos Hidalgo (2011) and is distributed by UCI under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). UCI provides the corpus in a different file format. The project reads the Kaggle CSV representation and transforms its SMS text into unigram and bigram counts for training. [UCI dataset citation](https://doi.org/10.24432/C5CC84)
-
-To run the notebook, install the additional packages and start Jupyter from `notebook/`.
-
-```sh
-python -m pip install "pandas==3.0.0" jupyterlab matplotlib seaborn imbalanced-learn
-cd notebook
-jupyter lab sms_spam_detection.ipynb
-```
-
-To regenerate artifacts offline, use a separate checkout with the CSV and prepared NLTK resources. From its repository root, install `pandas==3.0.0` and run `python -m app.train`. That command writes both model files in the checkout where it runs.
+The SMS Spam Collection (Almeida & Gómez Hidalgo, 2011) is distributed by UCI under CC BY 4.0
+([doi:10.24432/C5CC84](https://doi.org/10.24432/C5CC84)). The Kaggle CSV used here is not
+redistributed in this repository, see [docs/DATASET.md](docs/DATASET.md). The original v1 notebook
+is kept in `notebook/` for history. Its metrics come from the v1 protocol and are superseded by
+[docs/EVALUATION.md](docs/EVALUATION.md).
