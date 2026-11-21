@@ -31,6 +31,9 @@ from spam_detector.features import BlockConfig, FeatureSpace
 from spam_detector.text import normalize
 
 
+RANDOM_STATE = 0
+
+
 class FittedModel(Protocol):
     def scores(self, texts: Sequence[str]) -> np.ndarray: ...
 
@@ -130,6 +133,9 @@ class CandidateSpec:
         x = to_csr(space, analyzed)
         y = np.asarray(labels)
         params = dict(self.params)
+        # liblinear's dual coordinate descent shuffles samples; without a fixed seed
+        # two runs give slightly different weights and the artifact is not reproducible.
+        params.setdefault("random_state", RANDOM_STATE)
 
         if self.classifier == "logistic_regression":
             model = LogisticRegression(max_iter=5000, **params).fit(x, y)
@@ -138,6 +144,7 @@ class CandidateSpec:
             model = LinearSVC(max_iter=20000, **params).fit(x, y)
             coefficients, intercept = model.coef_.ravel(), float(model.intercept_[0])
         elif self.classifier == "multinomial_nb":
+            params.pop("random_state")  # Naive Bayes is deterministic and takes no seed
             model = MultinomialNB(**params).fit(x, y)
             coefficients = model.feature_log_prob_[1] - model.feature_log_prob_[0]
             intercept = float(model.class_log_prior_[1] - model.class_log_prior_[0])
