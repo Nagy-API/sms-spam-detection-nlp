@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "deploy/**", "phase-*/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, unit and integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Lint
+        run: python -m ruff check .
+      - name: Tests (dataset-dependent tests skip: the corpus is not redistributed)
+        run: python -m pytest --cov=spam_detector --cov=app --cov-report=term-missing:skip-covered
+      - name: Verify the committed release artifact
+        run: |
+          python -m spam_detector verify
+          python -m spam_detector benchmark --repeats 500
+
+  runtime:
+    name: API runs with runtime dependencies only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Training libraries must be absent
+        run: |
+          ! python -c "import sklearn" 2>/dev/null
+          ! python -c "import numpy" 2>/dev/null
+      - name: Serve and query the API
+        run: |
+          python -m uvicorn app.main:app --port 8000 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
+          curl -sf localhost:8000/ready
+          curl -sf -X POST localhost:8000/predict -H 'content-type: application/json' \
+            -d '{"text":"WINNER!! Claim your prize, call 09061701461"}' | tee /dev/stderr | grep -q '"label":"spam"'
+          curl -sf -X POST localhost:8000/predict -H 'content-type: application/json' \
+            -d '{"text":"See you at lunch tomorrow"}' | grep -q '"label":"ham"'
+          du -sh "$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+
+  browser:
+    name: Browser regressions (Playwright, Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - run: npm --prefix tests/browser ci
+      - run: npm --prefix tests/browser exec -- playwright install --with-deps chromium
+      - run: npm --prefix tests/browser test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: tests/browser/test-results/
