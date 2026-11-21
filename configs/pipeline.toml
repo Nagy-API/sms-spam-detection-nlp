@@ -38,6 +38,10 @@ candidate = "auto"
 model_version = "2.0.0"
 output_dir = "models/spam-v2"
 min_latin_letter_ratio = 0.5
+# Abstain when no word n-gram is known. Added after the first locked-test run, motivated by
+# handwritten golden cases ("qzxwvj" got a confident "ham"); measured on development folds it
+# abstains on 4 of 4,125 messages (0.1%, all ham). See docs/EVALUATION.md "Test-set access".
+require_known_word = true
 
 # --------------------------------------------------------------------------- candidates
 # Shared block definitions are repeated inline on purpose: each candidate reads standalone.

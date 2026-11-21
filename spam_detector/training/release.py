@@ -42,6 +42,16 @@ from spam_detector.training.splits import cross_validation_folds
 PARITY_TOLERANCE = 1e-9
 
 
+def _relative(path: Path) -> str:
+    """Repository-relative path for reports (never leak a local absolute path)."""
+    from spam_detector.config import PROJECT_ROOT
+
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return path.name
+
+
 def resolve_candidate(config: PipelineConfig, cv_results_path: Path) -> CandidateSpec:
     name = config.release["candidate"]
     if name == "auto":
@@ -85,7 +95,9 @@ def build_release(config: PipelineConfig, prepared: PreparedData, spec: Candidat
         intercept=float(final.intercept),
         calibration=PlattCalibration(a, b),
         threshold=threshold,
-        abstention=AbstentionPolicy(config.release["min_latin_letter_ratio"]),
+        abstention=AbstentionPolicy(
+            config.release["min_latin_letter_ratio"], config.release.get("require_known_word", False)
+        ),
     )
 
     # 4. Round-trip through JSON and compare with scikit-learn on every message.
@@ -153,7 +165,7 @@ def evaluate_locked_test(config: PipelineConfig, prepared: PreparedData, artifac
 
     report: dict[str, Any] = {
         "evaluated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
-        "artifact": {"directory": artifact_dir.as_posix(), "model_version": loaded.artifact.model_version,
+        "artifact": {"directory": _relative(artifact_dir), "model_version": loaded.artifact.model_version,
                      "sha256": loaded.sha256},
         "test_set": prepared.split.summary()["test"],
         "split_fingerprint": prepared.split.fingerprint(),

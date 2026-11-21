@@ -123,7 +123,8 @@ def letter_profile(text: str) -> tuple[int, int]:
     """
     letters = 0
     latin = 0
-    for character in text:
+    # NFKC first: full-width "ＦＲＥＥ" is Latin text in a compatibility encoding.
+    for character in unicodedata.normalize("NFKC", text):
         if character.isalpha():
             letters += 1
             if character.isascii() or unicodedata.name(character, "").startswith("LATIN"):

@@ -50,6 +50,11 @@ class SpamClassifier:
         self.artifact = artifact
         self._space = artifact.feature_space
         self._coefficients = artifact.coefficients
+        self._word_columns = [
+            range(offset, offset + block.size)
+            for block, offset in zip(self._space.blocks, self._space.offsets, strict=True)
+            if block.config.analyzer == "word"
+        ]
 
     @classmethod
     def load(cls, directory: Path) -> tuple[SpamClassifier, LoadedArtifact]:
@@ -72,13 +77,18 @@ class SpamClassifier:
             return "unsupported_script"
         return None
 
+    def _has_known_word(self, vector: SparseVector) -> bool:
+        if not self._word_columns:
+            return True  # the model has no word block; the rule does not apply
+        return any(column in columns for column in vector for columns in self._word_columns)
+
     # --------------------------------------------------------------------- public
     def predict(self, text: str) -> Prediction:
         reason = self._abstention_reason(text)
         if reason is not None:
             return Prediction(label="inconclusive", spam_probability=None, reason=reason)
         vector = self.vectorize(text)
-        if not vector:
+        if not vector or (self.artifact.abstention.require_known_word and not self._has_known_word(vector)):
             return Prediction(label="inconclusive", spam_probability=None, reason="no_recognized_features")
         score = self.score_vector(vector)
         probability = self.artifact.calibration.probability(score)

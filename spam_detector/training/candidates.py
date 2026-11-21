@@ -30,7 +30,6 @@ from sklearn.svm import LinearSVC
 from spam_detector.features import BlockConfig, FeatureSpace
 from spam_detector.text import normalize
 
-
 RANDOM_STATE = 0
 
 

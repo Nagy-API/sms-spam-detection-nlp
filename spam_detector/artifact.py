@@ -78,6 +78,10 @@ class AbstentionPolicy:
     """
 
     min_latin_letter_ratio: float = 0.5
+    #: Abstain unless at least one *word* n-gram is in the vocabulary. Character
+    #: n-grams overlap with almost any Latin string (even "qzxwvj"), so without
+    #: this rule gibberish receives a confident answer driven by the class prior.
+    require_known_word: bool = False
 
 
 @dataclass
@@ -127,7 +131,10 @@ class LinearModelArtifact:
             "intercept": self.intercept,
             "calibration": {"method": "platt", "a": self.calibration.a, "b": self.calibration.b},
             "decision": {"positive_label": "spam", "threshold": self.threshold},
-            "abstention": {"min_latin_letter_ratio": self.abstention.min_latin_letter_ratio},
+            "abstention": {
+                "min_latin_letter_ratio": self.abstention.min_latin_letter_ratio,
+                "require_known_word": self.abstention.require_known_word,
+            },
         }
 
     def to_json_bytes(self) -> bytes:
@@ -169,7 +176,10 @@ class LinearModelArtifact:
                 intercept=float(data["intercept"]),
                 calibration=PlattCalibration(float(calibration["a"]), float(calibration["b"])),
                 threshold=float(data["decision"]["threshold"]),
-                abstention=AbstentionPolicy(float(data["abstention"]["min_latin_letter_ratio"])),
+                abstention=AbstentionPolicy(
+                    float(data["abstention"]["min_latin_letter_ratio"]),
+                    bool(data["abstention"].get("require_known_word", False)),
+                ),
                 preprocessing_version=str(data["preprocessing_version"]),
                 schema_version=int(schema),
             )
