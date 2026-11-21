@@ -1,0 +1,125 @@
+{
+  "evaluated_at": "2026-11-21T20:10:27+00:00",
+  "artifact": {
+    "directory": "models/spam-v2",
+    "model_version": "2.0.0",
+    "sha256": "5f79aee6ba36e0f4e678010a1f5be95213a934cd29eb85bdb72d9eced526f34a"
+  },
+  "test_set": {
+    "messages": 1031,
+    "spam": 128,
+    "ham": 903,
+    "spam_rate": 0.1242,
+    "groups": 970
+  },
+  "split_fingerprint": "221cdf6b89901463bba5ff237b68ef64fa0693e8fbc5b853b79ccee64b9c6077",
+  "caveat": "Internal held-out evaluation. The test messages come from the same corpus, collection period and sources as the training data, and the original v1 holdout (which overlaps this test set) was seen during the v1 project. This is not an independent external evaluation.",
+  "coverage": {
+    "predicted": 1031,
+    "inconclusive": 0,
+    "inconclusive_reasons": {}
+  },
+  "selected_model": {
+    "decision_threshold": 0.75,
+    "metrics": {
+      "accuracy": 0.9951503394762367,
+      "spam_precision": 1.0,
+      "spam_recall": 0.9609375,
+      "spam_f1": 0.9800796812749004,
+      "macro_f1": 0.9886593878489356,
+      "balanced_accuracy": 0.98046875,
+      "mcc": 0.9775714776642838,
+      "false_positive_rate": 0.0,
+      "pr_auc": 0.9934617563393451,
+      "roc_auc": 0.9953713316722037,
+      "false_positives": 0,
+      "false_negatives": 5,
+      "expected_cost_per_message": 0.004849660523763337,
+      "confusion_matrix": [
+        [
+          903,
+          0
+        ],
+        [
+          5,
+          123
+        ]
+      ],
+      "brier": 0.003583274290941024,
+      "log_loss": 0.021194097405324554,
+      "ece": 0.010772026954049392
+    },
+    "bootstrap_95ci": {
+      "accuracy": [
+        0.9903006789524733,
+        0.9990300678952473
+      ],
+      "spam_precision": [
+        1.0,
+        1.0
+      ],
+      "spam_recall": [
+        0.9256136672011842,
+        0.9918032786885246
+      ],
+      "spam_f1": [
+        0.9613700635459294,
+        0.9958847736625515
+      ],
+      "pr_auc": [
+        0.9798283825107651,
+        1.0
+      ]
+    }
+  },
+  "legacy_baseline": {
+    "description": "v1 recipe retrained on the development split, default NB decision (log-odds >= 0)",
+    "metrics": {
+      "accuracy": 0.979631425800194,
+      "spam_precision": 0.9652173913043478,
+      "spam_recall": 0.8671875,
+      "spam_f1": 0.9135802469135802,
+      "macro_f1": 0.9510177210378786,
+      "balanced_accuracy": 0.9313789105758583,
+      "mcc": 0.9037350123234374,
+      "false_positive_rate": 0.004429678848283499,
+      "pr_auc": 0.9591438194368476,
+      "roc_auc": 0.9801702657807309,
+      "false_positives": 4,
+      "false_negatives": 17,
+      "expected_cost_per_message": 0.028128031037827354,
+      "confusion_matrix": [
+        [
+          899,
+          4
+        ],
+        [
+          17,
+          111
+        ]
+      ]
+    },
+    "bootstrap_95ci": {
+      "accuracy": [
+        0.9709020368574199,
+        0.987415130940834
+      ],
+      "spam_precision": [
+        0.9292035398230089,
+        0.992
+      ],
+      "spam_recall": [
+        0.8068922051579251,
+        0.9243808049535603
+      ],
+      "spam_f1": [
+        0.8739455005303092,
+        0.9481481481481482
+      ],
+      "pr_auc": [
+        0.9300878353575789,
+        0.9832797786122052
+      ]
+    }
+  }
+}

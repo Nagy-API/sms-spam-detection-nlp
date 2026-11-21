@@ -1,0 +1,101 @@
+{
+  "model_sha256": "5f79aee6ba36e0f4e678010a1f5be95213a934cd29eb85bdb72d9eced526f34a",
+  "cases": [
+    {
+      "text": "See you at lunch tomorrow",
+      "label": "ham",
+      "reason": null,
+      "spam_probability": 0.00027951630408070685
+    },
+    {
+      "text": "Congratulations! You won a free prize. Call now to claim.",
+      "label": "spam",
+      "reason": null,
+      "spam_probability": 0.9647755500578574
+    },
+    {
+      "text": "WINNER!! Claim your £900 prize, call 09061701461 before midnight",
+      "label": "spam",
+      "reason": null,
+      "spam_probability": 0.9996527666201821
+    },
+    {
+      "text": "Can you pick up milk on the way home? Thanks x",
+      "label": "ham",
+      "reason": null,
+      "spam_probability": 0.00036603281041466075
+    },
+    {
+      "text": "Your account is suspended. Verify now at www.example-secure-login.com",
+      "label": "ham",
+      "reason": null,
+      "spam_probability": 0.45278088862200877
+    },
+    {
+      "text": "Free entry to win a holiday! Txt WIN to 87121",
+      "label": "spam",
+      "reason": null,
+      "spam_probability": 0.9997914554687133
+    },
+    {
+      "text": "Mum says dinner is at 7, don’t be late 🙂",
+      "label": "ham",
+      "reason": null,
+      "spam_probability": 0.0005016472890143023
+    },
+    {
+      "text": "ＦＲＥＥ ＰＲＩＺＥ ｃａｌｌ ０９０６１７０１４６１",
+      "label": "spam",
+      "reason": null,
+      "spam_probability": 0.9999971381859928
+    },
+    {
+      "text": "ok",
+      "label": "ham",
+      "reason": null,
+      "spam_probability": 0.0004983067595798919
+    },
+    {
+      "text": "12345",
+      "label": "inconclusive",
+      "reason": "no_letters",
+      "spam_probability": null
+    },
+    {
+      "text": "🙂🙂🙂",
+      "label": "inconclusive",
+      "reason": "no_letters",
+      "spam_probability": null
+    },
+    {
+      "text": "https://example.com",
+      "label": "spam",
+      "reason": null,
+      "spam_probability": 0.999761337378596
+    },
+    {
+      "text": "مرحبا كيف حالك",
+      "label": "inconclusive",
+      "reason": "unsupported_script",
+      "spam_probability": null
+    },
+    {
+      "text": "Привет, как дела?",
+      "label": "inconclusive",
+      "reason": "unsupported_script",
+      "spam_probability": null
+    },
+    {
+      "text": "qzxwvj",
+      "label": "inconclusive",
+      "reason": "no_recognized_features",
+      "spam_probability": null
+    },
+    {
+      "text": "the and is",
+      "label": "ham",
+      "reason": null,
+      "spam_probability": 0.00475709027555242
+    }
+  ]
+}
