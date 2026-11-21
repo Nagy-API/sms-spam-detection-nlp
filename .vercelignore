@@ -1,0 +1,8 @@
+/data/
+/nltk_data/
+/notebook/
+/tests/
+/.claude/
+.env
+.env.*
+*.log

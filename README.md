@@ -7,41 +7,51 @@ This project classifies English SMS-style text as `spam` or `ham` (legitimate) a
 | Path | Purpose |
 | --- | --- |
 | `app/main.py` | FastAPI service. It cleans and tokenizes text, removes English stop words, and lemmatizes tokens using NLTK. A unigram and bigram `CountVectorizer` feeds a multinomial Naive Bayes classifier. |
-| `frontend/` | Static HTML, CSS, and JavaScript that calls the local API. |
+| `frontend/` | Static HTML, CSS, and JavaScript that calls the same-origin API. |
 | `models/` | Project-generated scikit-learn classifier and vectorizer, saved with joblib. |
 | `notebook/sms_spam_detection.ipynb` | Data exploration, preprocessing, training experiments, and evaluation on the SMS dataset. |
 | `requirements.txt` | Python dependencies for the API. |
 
 ## Install and run locally
 
-Use Python 3.11. From the repository root, create and activate a virtual environment.
+Use Python 3.12. From the repository root, create and activate a virtual environment.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-On macOS or Linux, activate it with `source .venv/bin/activate`. Install the dependencies and NLTK resources in the active environment. The saved artifacts were serialized with scikit-learn 1.8.0.
+On macOS or Linux, activate it with `source .venv/bin/activate`. Install the pinned dependencies and prepare the pinned NLTK resources once before starting the app. The saved artifacts were serialized with scikit-learn 1.8.0.
 
 ```sh
-python -m pip install -r requirements.txt "scikit-learn==1.8.0"
-python -m nltk.downloader stopwords punkt_tab averaged_perceptron_tagger_eng wordnet
+python -m pip install -r requirements.txt
+python scripts/prepare_nltk.py
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-In the first terminal, start the API from `app/` so its relative paths resolve.
+Open the [local interface](http://127.0.0.1:8000/). The same server provides `GET /health` and accepts `POST /predict` with a JSON `text` field. Predictions include `label` and `spam_probability`. The server loads the included joblib artifacts and local NLTK resources at startup. A missing artifact stops startup. [Interactive API documentation](http://127.0.0.1:8000/docs)
+
+## Tests
+
+After preparing the NLTK resources, run these commands from the repository root.
 
 ```sh
-cd app
-python -m uvicorn main:app --host 127.0.0.1 --port 8000
+python -m pip install "httpx2==2.16.2"
+python -m unittest discover -s tests -v
 ```
 
-In a second terminal with the environment active, run this command from the repository root and open [the local interface](http://127.0.0.1:8080).
+## Vercel preview
+
+From a clean checkout of the branch you want to preview, run the following commands at the repository root. Sign in and select or create the intended Vercel project when prompted. The project uses the FastAPI framework preset and requires no environment variables.
 
 ```sh
-python -m http.server 8080 --bind 127.0.0.1 --directory frontend
+npx vercel@59.23.2 login
+npx vercel@59.23.2 deploy --target=preview
 ```
 
-The API exposes `GET /` for a health check and `POST /predict` for a JSON body with a `text` field. The response includes `label` and `spam_probability`. [Interactive API documentation](http://127.0.0.1:8000/docs) is available when the API is running.
+On the preview URL, check `/health`, then submit one normal and one spam message from `/`. Confirm the browser sends `POST /predict` to the preview origin and displays both results. Check the build and function logs for startup errors and review cold invocation timing. Use the preview URL for these checks. [Vercel Preview environments](https://vercel.com/docs/deployments/environments#preview-environment-pre-production)
+
+Vercel builds one Python 3.12 function from `app/main.py` and serves the frontend from the same origin. The build downloads and verifies four upstream NLTK archives and bundles the required resources, including the English Punkt tables, alongside the two existing model files. The build strips NumPy, SciPy, and scikit-learn's upstream test directories from its disposable build environment to fit the function bundle. The deployment excludes the SMS training dataset, notebook, project tests, and offline training script. [Vercel FastAPI guide](https://vercel.com/docs/frameworks/backend/fastapi) · [Python runtime](https://vercel.com/docs/functions/runtimes/python)
 
 ## Dataset and retraining
 
@@ -52,9 +62,9 @@ The original SMS Spam Collection is attributed to Tiago Almeida and Jos Hidalgo 
 To run the notebook, install the additional packages and start Jupyter from `notebook/`.
 
 ```sh
-python -m pip install jupyterlab matplotlib seaborn imbalanced-learn
+python -m pip install "pandas==3.0.0" jupyterlab matplotlib seaborn imbalanced-learn
 cd notebook
 jupyter lab sms_spam_detection.ipynb
 ```
 
-The API trains and saves both artifacts on startup when either model file is missing. For a fresh training run, use a separate checkout with the CSV in place and an empty `models/` directory so you can preserve the supplied files.
+To regenerate artifacts offline, use a separate checkout with the CSV and prepared NLTK resources. From its repository root, install `pandas==3.0.0` and run `python -m app.train`. That command writes both model files in the checkout where it runs.

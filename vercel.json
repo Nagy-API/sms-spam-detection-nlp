@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "buildCommand": "python scripts/prepare_nltk.py --vercel-build",
+  "functions": {
+    "app/main.py": {
+      "includeFiles": "{models/*.pkl,nltk_data/**}",
+      "excludeFiles": "{data/**,notebook/**,scripts/**,tests/**,app/train.py,.venv/**,**/*.log}"
+    }
+  }
+}
