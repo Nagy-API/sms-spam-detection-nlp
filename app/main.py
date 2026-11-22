@@ -42,6 +42,7 @@ from spam_detector.inference import SpamClassifier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL_DIR = PROJECT_ROOT / "models" / "spam-v2"
+V3_MODEL_DIR = PROJECT_ROOT / "models" / "trace-v3"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 MAX_MESSAGE_CHARS = 5000
 # 5,000 code points, each at most 12 bytes when JSON-escaped as a surrogate pair
@@ -232,9 +233,7 @@ def create_app(model_dir: Path | None = None, *, experimental_model_dir: Path | 
     _configure_logging()
     directory = model_dir or Path(os.environ.get("SPAM_MODEL_DIR", DEFAULT_MODEL_DIR))
     experimental_path = os.environ.get("TRACE_EXPERIMENTAL_MODEL_DIR")
-    experimental_directory = experimental_model_dir or (Path(experimental_path) if experimental_path else None)
-    if os.environ.get("VERCEL_ENV") == "production":
-        experimental_directory = None
+    experimental_directory = experimental_model_dir or (Path(experimental_path) if experimental_path else V3_MODEL_DIR)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -242,7 +241,7 @@ def create_app(model_dir: Path | None = None, *, experimental_model_dir: Path | 
         # A broken artifact does not crash the process: /ready and /predict report
         # 503 with a reason, which is far easier to diagnose than a crash loop.
         app.state.model = _load_model(directory)
-        app.state.experimental = _load_model(experimental_directory) if experimental_directory else ModelState()
+        app.state.experimental = _load_model(experimental_directory)
         yield
 
     app = FastAPI(
@@ -271,7 +270,7 @@ def create_app(model_dir: Path | None = None, *, experimental_model_dir: Path | 
         response.headers.update(_SECURITY_HEADERS)
         if not request.url.path.startswith(("/docs", "/redoc", "/openapi")):
             response.headers["Content-Security-Policy"] = _FRONTEND_CSP
-        if request.url.path in {"/predict", "/predict/v3", "/ready", "/model", "/health"}:
+        if request.url.path in {"/predict", "/predict/v3", "/model/v3", "/ready", "/model", "/health"}:
             response.headers["Cache-Control"] = "no-store"
             _log(
                 "request",
@@ -375,32 +374,51 @@ def create_app(model_dir: Path | None = None, *, experimental_model_dir: Path | 
             headers={"Allow": "POST"},
         )
 
-    if experimental_directory:
-        @app.post("/predict/v3", response_model=ExperimentalPredictResponse, tags=["experimental"])
-        def experimental_predict(body: PredictRequest, request: Request) -> Any:
-            baseline = model_state(request)
-            head: ModelState = request.app.state.experimental
-            if (
-                baseline.classifier is None or head.classifier is None or head.loaded is None
-                or head.loaded.metadata.get("task") != "experimental_phishing_head"
-                or not head.loaded.artifact.model_version.startswith("3.")
-            ):
-                return unavailable()
+    def verified_head(request: Request) -> ModelState | None:
+        baseline = model_state(request)
+        head: ModelState = request.app.state.experimental
+        if (
+            baseline.loaded is None or head.classifier is None or head.loaded is None
+            or head.loaded.metadata.get("task") != "experimental_phishing_head"
+            or head.loaded.metadata.get("baseline_sha256") != baseline.loaded.sha256
+            or not head.loaded.artifact.model_version.startswith("3.")
+        ):
+            return None
+        return head
 
-            result = baseline.classifier.predict(body.text)
-            label = result.label
-            if result.reason not in {"no_letters", "unsupported_script"}:
-                phishing = head.classifier.predict(body.text)
-                if phishing.label == "spam":
-                    label = "phishing"
-            reason = result.reason if label == "inconclusive" else None
-            request.state.log_fields = {"label": label, "reason": reason, "chars": len(body.text)}
-            return ExperimentalPredictResponse(
-                label=label,
-                spam_probability=None if result.spam_probability is None else round(result.spam_probability, 4),
-                reason=reason,
-                model_version=head.loaded.artifact.model_version,
-            )
+    @app.get("/model/v3", tags=["experimental"])
+    def v3_metadata(request: Request) -> Any:
+        head = verified_head(request)
+        if head is None or head.loaded is None:
+            return unavailable()
+        return {
+            "model_version": head.loaded.artifact.model_version,
+            "model_sha256": head.loaded.sha256,
+            "baseline_sha256": head.loaded.metadata["baseline_sha256"],
+            "phishing_status": "experimental",
+            "independent_phishing_validation": False,
+        }
+
+    @app.post("/predict/v3", response_model=ExperimentalPredictResponse, tags=["experimental"])
+    def experimental_predict(body: PredictRequest, request: Request) -> Any:
+        baseline = model_state(request)
+        head = verified_head(request)
+        if baseline.classifier is None or head is None or head.classifier is None or head.loaded is None:
+            return unavailable()
+        result = baseline.classifier.predict(body.text)
+        label = result.label
+        if result.reason not in {"no_letters", "unsupported_script"}:
+            phishing = head.classifier.predict(body.text)
+            if phishing.label == "spam":
+                label = "phishing"
+        reason = result.reason if label == "inconclusive" else None
+        request.state.log_fields = {"label": label, "reason": reason, "chars": len(body.text)}
+        return ExperimentalPredictResponse(
+            label=label,
+            spam_probability=None if result.spam_probability is None else round(result.spam_probability, 4),
+            reason=reason,
+            model_version=head.loaded.artifact.model_version,
+        )
 
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
     return app

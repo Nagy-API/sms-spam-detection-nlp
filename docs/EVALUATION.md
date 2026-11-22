@@ -142,3 +142,14 @@ python -m pytest -m dataset                 # dataset-gated checks, incl. byte-f
 
 `release` refuses to overwrite `models/spam-v2`, and `evaluate` refuses to run without
 `--i-understand-this-uses-the-locked-test-set` (and logs every run).
+## TRACE V3 release candidate evidence
+
+The V3 head remains experimental. The historical metrics in this document describe V2. The
+[V3 development matrices](../reports/v3/development.json) describe source-confounded research
+baselines, not the packaged composite or independent phishing accuracy. The packaged head
+uses the published V2 word vocabulary, separate development calibration groups and an
+experimental operating point. Local API and Chrome checks exercised actual predictions for
+all four outcomes. These integration checks do not estimate generalization or false-positive rates.
+
+The independent cohort requirements are recorded in [V3 development](V3_DEVELOPMENT.md).
+They remain open. No frozen independent test was scored for this release candidate.

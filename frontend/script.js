@@ -2,7 +2,7 @@
 
 // TRACE: same-origin predictions with an immutable original in comparison mode.
 const API_URL = "/predict";
-const experimentalV3 = new URLSearchParams(window.location.search).get("model") === "v3";
+const experimentalV3 = new URLSearchParams(window.location.search).get("model") !== "v2";
 const MAX_CHARS = 5000;
 const MAX_FILE_BYTES = MAX_CHARS * 4 + 3;
 const LENGTH_ERROR = "Keep your SMS message to 5,000 characters or fewer.";
@@ -24,6 +24,7 @@ const INCONCLUSIVE_REASONS = {
 };
 const el = (id) => document.getElementById(id);
 el("experimentalNotice").hidden = !experimentalV3;
+el("baselineNotice").hidden = experimentalV3;
 const form = el("smsForm"), smsText = el("smsText"), dropzone = el("dropzone"), fileInput = el("fileInput");
 const charCount = el("charCount"), uploadBtn = el("uploadBtn"), clearBtn = el("clearBtn");
 const analyzeBtn = el("analyzeBtn"), messageError = el("messageError"), analysisStatus = el("analysisStatus");
@@ -189,10 +190,16 @@ async function requestPrediction(text, signal) {
     return { error, invalidInput: true };
   }
   if (response.status === 413) return { error: LENGTH_ERROR, invalidInput: true };
-  if (response.status === 503) return { error: "The prediction service is unavailable. Try again later." };
+  if (response.status === 503) {
+    return { error: experimentalV3 ? "TRACE V3 is unavailable. Try spam-only mode below." :
+      "The prediction service is unavailable. Try again later." };
+  }
   if (!response.ok) return { error: SERVER_ERROR };
   const result = await response.json().catch(() => null);
   if (!result || !Object.hasOwn(OUTCOMES, result.label)) return { error: SERVER_ERROR };
+  if (result.label === "phishing" && (!experimentalV3 || result.experimental !== true)) {
+    return { error: SERVER_ERROR };
+  }
   return result;
 }
 

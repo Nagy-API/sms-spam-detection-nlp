@@ -3,11 +3,28 @@
 ## What gets deployed
 
 One Python 3.12 serverless function built from `app/main.py` (FastAPI preset), serving the API and
-the static frontend from the same origin. `vercel.json` includes `models/spam-v2/**` and
+the static frontend from the same origin. `vercel.json` includes `models/spam-v2/**`, `models/trace-v3/**` and
 `frontend/**` and excludes data, notebook, reports, docs, configs, tests, NLTK data, the legacy
 pickles, and `spam_detector/training/`. `.vercelignore` keeps those out of the upload as well.
 **No build command and no environment variables are required.** (Optional: `SPAM_MODEL_DIR`
 overrides the artifact directory.)
+
+## TRACE V3 release checklist
+
+1. Reproduce the head with `python -m spam_detector.training.v3 export` and verify both artifact digests against the bundled metadata.
+2. Run Ruff, the full Python suite and Playwright. Build a clean copy with Vercel CLI `vercel build --prod` using the existing project settings.
+3. Wait for billing restoration, rerun mandatory GitHub checks, and resolve failures before consolidating the approved PRs in dependency order.
+4. Confirm the exact main SHA and both model digests before staging the authorized release.
+5. Stage Production without assigning its domain, then test `/health`, both model endpoints, both prediction routes, experimental labeling, V2 fallback and the responsive comparison.
+6. Promote the verified staged deployment. Recheck anonymous public access, logs, provenance and rollback.
+
+Phishing remains experimental unless the independent evaluation gates pass. Demo deployment must preserve that disclosure.
+
+**Local RC build evidence:** Vercel CLI 59.23.2 completed `vercel build --prod` for the linked
+project. Its function map specifies Python 3.12, Linux x86-64 dependencies and both verified
+model assets. No raw corpora or environment files were mapped. Use a clean staging directory
+without spaces on Windows, because the CLI can fail to quote the `uv` executable path.
+Do not publish the local build or its downloaded project settings.
 
 ## Verified locally (this branch)
 

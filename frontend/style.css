@@ -78,6 +78,7 @@ a:focus-visible, [tabindex]:focus-visible, button:focus-visible, textarea:focus-
 .result-box .verdict { margin-top: 9px; }
 .verdict[data-outcome="spam"] { --verdict-accent: #d77d76; }
 .verdict[data-outcome="phishing"] { --verdict-accent: #ef9a63; }
+.footer a { color: #c5c7cb; }
 .verdict[data-outcome="ham"] { --verdict-accent: #82b9a1; }
 .verdict[data-outcome="inconclusive"] { --verdict-accent: #d9b57c; }
 .verdict-icon {

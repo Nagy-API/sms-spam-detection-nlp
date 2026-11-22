@@ -22,10 +22,10 @@ from sklearn.pipeline import make_pipeline
 from spam_detector.artifact import AbstentionPolicy, LinearModelArtifact, PlattCalibration, save_artifact
 from spam_detector.config import PipelineConfig
 from spam_detector.data import Message
-from spam_detector.features import BlockConfig
+from spam_detector.features import BlockConfig, FeatureSpace
 from spam_detector.inference import SpamClassifier
 from spam_detector.text import URL_TOKEN, letter_profile, normalize
-from spam_detector.training.candidates import AnalysisCache, CandidateSpec, FittedLinearModel, fit_platt
+from spam_detector.training.candidates import AnalysisCache, CandidateSpec, FittedLinearModel, fit_platt, to_csr
 from spam_detector.training.dedup import canonical_key, near_duplicate_groups
 from spam_detector.training.experiment import prepare_data
 
@@ -231,27 +231,33 @@ def export_candidate(output: Path) -> str:
     groups = [group for _, group in rows]
     splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=20261122)
     train, calibration = next(splitter.split(texts, labels, groups))
-    spec = CandidateSpec(
-        "v3-phishing-word12", "logistic_regression", (BlockConfig("word", (1, 2), min_df=2),),
-        {"class_weight": "balanced"},
-    )
-    fitted = spec.fit([texts[i] for i in train], [int(labels[i] == "phishing") for i in train], AnalysisCache())
-    assert isinstance(fitted, FittedLinearModel)
-    scores = fitted.scores([texts[i] for i in calibration])
+    baseline, loaded = SpamClassifier.load(Path("models/spam-v2"))
+    allowed_terms = {term for block in loaded.artifact.feature_space.blocks
+                     if block.config.analyzer == "word" for term in block.terms}
+    space = FeatureSpace.from_configs((BlockConfig("word", (1, 2), min_df=5),))
+    analyzed = [space.analyze(text) for text in texts]
+    # No string learned from research messages may enter the distributed vocabulary.
+    space.fit([[[term for term in analyzed[i][0] if term in allowed_terms]] for i in train])
+    classifier = LogisticRegression(max_iter=5000, class_weight="balanced", random_state=20261122)
+    classifier.fit(to_csr(space, [analyzed[i] for i in train]), [int(labels[i] == "phishing") for i in train])
+    scores = classifier.decision_function(to_csr(space, [analyzed[i] for i in calibration]))
     a, b = fit_platt(scores, [int(labels[i] == "phishing") for i in calibration])
     artifact = LinearModelArtifact(
-        model_version="3.0.0-dev.1",
-        feature_space=fitted.space,
-        coefficients=fitted.coefficients.tolist(),
-        intercept=fitted.intercept,
+        model_version="3.0.0-rc.1",
+        feature_space=space,
+        coefficients=classifier.coef_.ravel().tolist(),
+        intercept=float(classifier.intercept_[0]),
         calibration=PlattCalibration(a, b),
         threshold=0.9,
         abstention=AbstentionPolicy(require_known_word=True),
-        estimator=spec.name,
+        estimator="phishing-word12-v2-vocabulary",
     )
     return save_artifact(artifact, output, {
         "intended_use": "offline development only; source-confounded proxy labels",
         "task": "experimental_phishing_head",
+        "baseline_sha256": loaded.sha256,
+        "baseline_version": baseline.artifact.model_version,
+        "vocabulary_policy": "V2 published word vocabulary only; minimum 5 fit documents",
         "fit_counts": dict(Counter(labels[i] for i in train)),
         "calibration_counts": dict(Counter(labels[i] for i in calibration)),
         **provenance,
@@ -261,7 +267,7 @@ def export_candidate(output: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("acquire", "benchmark", "export"))
-    parser.add_argument("--output", type=Path, default=ROOT / "candidate")
+    parser.add_argument("--output", type=Path, default=ROOT / "candidate-rc1")
     args = parser.parse_args()
     if args.command == "acquire":
         acquire()

@@ -102,3 +102,11 @@ What the current UI does and the redesign must keep (each item is covered by
 
 The redesign needs no backend or ML change. Model updates keep this contract and change only
 `model_version`.
+## TRACE V3 versioned API
+
+- `POST /predict/v3` accepts the same message payload as `POST /predict`. Its labels are
+  `ham`, `spam`, `phishing`, and `inconclusive`. It includes `experimental: true`.
+  `spam_probability` remains the V2 historical spam score and can be null. It is never a phishing score.
+- `GET /model/v3` reports the head and baseline checksums and its experimental validation status.
+- `POST /predict`, `GET /model`, and `GET /ready` preserve the V2 contract. A missing, incompatible,
+  or corrupt V3 head returns 503 on V3 endpoints and does not disable V2.

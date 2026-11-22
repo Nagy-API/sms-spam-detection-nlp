@@ -1,5 +1,14 @@
 # Model card: SMS spam detector v2.0.0
 
+## TRACE V3 release candidate
+
+`3.0.0-rc.1` adds a separately calibrated, experimental phishing head to the existing V2 spam
+classifier. Its word features are drawn exclusively from the published V2 vocabulary. The
+historical spam metrics below apply only to V2. They do not measure the V3 composite or modern phishing.
+The phishing head was fitted and calibrated on separate development groups with source-confounded
+labels. It has no independently established accuracy, false-positive rate, or fraud protection claim.
+Use this application for educational demonstrations. See [V3 development and release gates](V3_DEVELOPMENT.md).
+
 | | |
 |---|---|
 | Artifact | `models/spam-v2/model.json`, SHA-256 `5f79aee6ba36e0f4e678010a1f5be95213a934cd29eb85bdb72d9eced526f34a` |

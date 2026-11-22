@@ -1,5 +1,11 @@
 # Architecture
 
+TRACE V3 packages two checksummed linear artifacts. The legacy `/predict` endpoint uses the
+historically evaluated V2 spam model. `/predict/v3` can emit an experimental phishing verdict
+from a separate word model linked to that exact V2 artifact. The frontend defaults to V3 and
+offers spam-only mode. Training code, source corpora, and unrestricted research artifacts stay
+outside the serverless bundle.
+
 ## System overview
 
 ```mermaid

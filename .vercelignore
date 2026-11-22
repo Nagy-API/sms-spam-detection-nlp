@@ -4,6 +4,10 @@
 /tests/
 /reports/
 /docs/
+/TRACE_Silver_Kit/
+/screenshots/
+*.zip.tmp
+/frontend/favicon.svg
 /models/legacy-v1/
 /spam_detector/training/
 /requirements-train.txt

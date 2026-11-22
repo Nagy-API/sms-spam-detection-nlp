@@ -38,7 +38,7 @@ async function delayPrediction(page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?model=v2");
 });
 
 test("English SMS predictions render without safety claims or confidence scores", async ({ page }) => {
@@ -219,7 +219,7 @@ for (const [width, height] of [[320, 800], [390, 844], [768, 1024], [1440, 900]]
       if (message.type() === "error") problems.push(`console: ${message.text()}`);
     });
     await page.setViewportSize({ width, height });
-    await page.goto("/");
+    await page.goto("/?model=v2");
     await page.screenshot({ path: testInfo.outputPath(`trace-${width}-empty.png`), fullPage: true, animations: 'disabled' });
     await page.getByRole("textbox").fill(SPAM);
     await analyze(page);
@@ -536,3 +536,34 @@ test("experimental comparison renders the prediction returned by the V3 endpoint
   await expect(page.locator("#revisionLabel")).toHaveText("Likely Ham");
   expect(cases).toHaveLength(0);
 });
+
+for (const width of [390, 1440]) {
+  test(`packaged V3 predicts and compares through the real API at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+    await page.goto("/");
+    await expect(page.locator("#experimentalNotice")).toBeVisible();
+    const meta = await page.request.get("/model/v3");
+    expect((await meta.json()).independent_phishing_validation).toBe(false);
+    const input = page.getByRole("textbox");
+    for (const [text, label] of [
+      ["12345", "Inconclusive"],
+      [SPAM, "Likely Spam"],
+      ["Please verify your account at https://example.invalid/verify", "Potential Phishing"],
+    ]) {
+      await input.fill(text);
+      await analyze(page);
+      await expect(page.locator("#resultLabel")).toHaveText(label);
+    }
+    await page.getByRole("button", { name: "Try a variation" }).click();
+    await input.fill(HAM);
+    await analyze(page);
+    await expect(page.locator("#originalLabel")).toHaveText("Potential Phishing");
+    await expect(page.locator("#revisionLabel")).toHaveText("Likely Ham");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    expect(errors).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`trace-v3-${width}.png`), fullPage: true, animations: "disabled" });
+  });
+}

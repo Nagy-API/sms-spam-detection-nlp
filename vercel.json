@@ -3,7 +3,7 @@
   "framework": "fastapi",
   "functions": {
     "app/main.py": {
-      "includeFiles": "{models/spam-v2/**,frontend/**}",
+      "includeFiles": "{models/spam-v2/**,models/trace-v3/**,frontend/**}",
       "excludeFiles": "{data/**,notebook/**,scripts/**,tests/**,reports/**,docs/**,configs/**,models/legacy-v1/**,nltk_data/**,spam_detector/training/**,.venv/**,**/*.log}"
     }
   }
