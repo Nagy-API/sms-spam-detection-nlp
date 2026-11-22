@@ -1,0 +1,162 @@
+{
+  "protocol": "development-only; source and class are confounded; not a release evaluation",
+  "sources": {
+    "ncsu": {
+      "url": "https://raw.githubusercontent.com/wspr-ncsu/sms-phishing/a4f18cedc9909cbf8234eea3c2028080a1e95cd4/phishing_messages.csv",
+      "sha256": "d125c394af792faeb2b71b3f7100cad3b4cece02aff78cb4ec1fb9e7db90f230",
+      "license": "MIT (repository)",
+      "counts": {
+        "raw": 68029,
+        "excluded_length_or_script": 460,
+        "eligible": 67569
+      }
+    },
+    "imc": {
+      "url": "https://raw.githubusercontent.com/reportsmishing/Smishing-Dataset-IMC25/a6175560b57387199871e51fbef6bc523d2516b4/dataset/final_dataset_output.csv",
+      "sha256": "1bbd1e9e82c3ea023112207b80da268a5c4a07d2353c2b0898360ab037fa9a64",
+      "license": "CC BY 4.0",
+      "counts": {
+        "raw": 33869,
+        "excluded_source_label_or_language": 13179,
+        "excluded_length_or_script": 1,
+        "eligible": 20689
+      }
+    },
+    "historical_split": "221cdf6b89901463bba5ff237b68ef64fa0693e8fbc5b853b79ccee64b9c6077"
+  },
+  "overlap": {
+    "normalized_duplicates": 47539,
+    "cross_source_groups": 69,
+    "groups": 14224,
+    "quarantined_keys": 15426
+  },
+  "train_counts": {
+    "ham": 2888,
+    "spam": 393,
+    "phishing": 17154
+  },
+  "validation_counts": {
+    "ham": 721,
+    "spam": 98,
+    "phishing": 9195
+  },
+  "validation_group_count": 775,
+  "validation_url_counts": {
+    "spam": 18,
+    "ham": 2,
+    "phishing": 9195
+  },
+  "labels": [
+    "ham",
+    "spam",
+    "phishing",
+    "inconclusive"
+  ],
+  "development_confusion_matrices": {
+    "v2": [
+      [
+        721,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        98,
+        0,
+        0
+      ],
+      [
+        0,
+        9195,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "word": [
+      [
+        716,
+        2,
+        3,
+        0
+      ],
+      [
+        8,
+        89,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        9195,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "char_wb": [
+      [
+        717,
+        3,
+        1,
+        0
+      ],
+      [
+        4,
+        90,
+        4,
+        0
+      ],
+      [
+        0,
+        0,
+        9195,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "word_without_url_token": [
+      [
+        716,
+        2,
+        3,
+        0
+      ],
+      [
+        8,
+        88,
+        2,
+        0
+      ],
+      [
+        0,
+        0,
+        9195,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "release_gate": "blocked: independent, verified modern English benign cohort missing"
+}
