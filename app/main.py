@@ -135,6 +135,12 @@ class ErrorDetail(BaseModel):
     msg: str
 
 
+class ExperimentalPredictResponse(PredictResponse):
+    label: Literal["spam", "ham", "phishing", "inconclusive"]
+    spam_probability: float | None = Field(description="V2 historical spam score, when available.")
+    experimental: Literal[True] = True
+
+
 # -------------------------------------------------------------------------- state
 @dataclass
 class ModelState:
@@ -221,10 +227,14 @@ _FRONTEND_CSP = (
 
 
 # ----------------------------------------------------------------------- the app
-def create_app(model_dir: Path | None = None) -> FastAPI:
+def create_app(model_dir: Path | None = None, *, experimental_model_dir: Path | None = None) -> FastAPI:
     """Application factory. ``model_dir`` defaults to ``$SPAM_MODEL_DIR`` or ``models/spam-v2``."""
     _configure_logging()
     directory = model_dir or Path(os.environ.get("SPAM_MODEL_DIR", DEFAULT_MODEL_DIR))
+    experimental_path = os.environ.get("TRACE_EXPERIMENTAL_MODEL_DIR")
+    experimental_directory = experimental_model_dir or (Path(experimental_path) if experimental_path else None)
+    if os.environ.get("VERCEL_ENV") == "production":
+        experimental_directory = None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -232,6 +242,7 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
         # A broken artifact does not crash the process: /ready and /predict report
         # 503 with a reason, which is far easier to diagnose than a crash loop.
         app.state.model = _load_model(directory)
+        app.state.experimental = _load_model(experimental_directory) if experimental_directory else ModelState()
         yield
 
     app = FastAPI(
@@ -260,7 +271,7 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
         response.headers.update(_SECURITY_HEADERS)
         if not request.url.path.startswith(("/docs", "/redoc", "/openapi")):
             response.headers["Content-Security-Policy"] = _FRONTEND_CSP
-        if request.url.path in {"/predict", "/ready", "/model", "/health"}:
+        if request.url.path in {"/predict", "/predict/v3", "/ready", "/model", "/health"}:
             response.headers["Cache-Control"] = "no-store"
             _log(
                 "request",
@@ -363,6 +374,33 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
             status_code=405,
             headers={"Allow": "POST"},
         )
+
+    if experimental_directory:
+        @app.post("/predict/v3", response_model=ExperimentalPredictResponse, tags=["experimental"])
+        def experimental_predict(body: PredictRequest, request: Request) -> Any:
+            baseline = model_state(request)
+            head: ModelState = request.app.state.experimental
+            if (
+                baseline.classifier is None or head.classifier is None or head.loaded is None
+                or head.loaded.metadata.get("task") != "experimental_phishing_head"
+                or not head.loaded.artifact.model_version.startswith("3.")
+            ):
+                return unavailable()
+
+            result = baseline.classifier.predict(body.text)
+            label = result.label
+            if result.reason not in {"no_letters", "unsupported_script"}:
+                phishing = head.classifier.predict(body.text)
+                if phishing.label == "spam":
+                    label = "phishing"
+            reason = result.reason if label == "inconclusive" else None
+            request.state.log_fields = {"label": label, "reason": reason, "chars": len(body.text)}
+            return ExperimentalPredictResponse(
+                label=label,
+                spam_probability=None if result.spam_probability is None else round(result.spam_probability, 4),
+                reason=reason,
+                model_version=head.loaded.artifact.model_version,
+            )
 
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
     return app

@@ -2,6 +2,7 @@
 
 // TRACE: same-origin predictions with an immutable original in comparison mode.
 const API_URL = "/predict";
+const experimentalV3 = new URLSearchParams(window.location.search).get("model") === "v3";
 const MAX_CHARS = 5000;
 const MAX_FILE_BYTES = MAX_CHARS * 4 + 3;
 const LENGTH_ERROR = "Keep your SMS message to 5,000 characters or fewer.";
@@ -11,6 +12,7 @@ const SERVER_ERROR = "The prediction service had a problem. Try again.";
 const NETWORK_ERROR = "Could not reach the prediction service. Check your connection and try again.";
 const HAM_LIMITATION = "A Ham prediction does not guarantee message safety.";
 const OUTCOMES = {
+  phishing: { title: "Potential Phishing", icon: "!", description: "The experimental model flagged this message. Verify the request through a trusted channel." },
   spam: { title: "Likely Spam", icon: "!", description: "This message contains patterns the model associates with SMS spam." },
   ham: { title: "Likely Ham", icon: "✓", description: "This message contains patterns the model associates with legitimate SMS." },
   inconclusive: { title: "Inconclusive", icon: "?", description: "The message contains no words or phrases the model recognizes." },
@@ -21,6 +23,7 @@ const INCONCLUSIVE_REASONS = {
   no_recognized_features: "The message contains no words or phrases the model recognizes.",
 };
 const el = (id) => document.getElementById(id);
+el("experimentalNotice").hidden = !experimentalV3;
 const form = el("smsForm"), smsText = el("smsText"), dropzone = el("dropzone"), fileInput = el("fileInput");
 const charCount = el("charCount"), uploadBtn = el("uploadBtn"), clearBtn = el("clearBtn");
 const analyzeBtn = el("analyzeBtn"), messageError = el("messageError"), analysisStatus = el("analysisStatus");
@@ -173,7 +176,7 @@ clearBtn.addEventListener("click", () => {
 });
 
 async function requestPrediction(text, signal) {
-  const response = await fetch(API_URL, {
+  const response = await fetch(experimentalV3 ? "/predict/v3" : API_URL, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }), signal,
   });

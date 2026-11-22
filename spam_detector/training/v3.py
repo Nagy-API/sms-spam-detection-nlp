@@ -19,10 +19,13 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import make_pipeline
 
+from spam_detector.artifact import AbstentionPolicy, LinearModelArtifact, PlattCalibration, save_artifact
 from spam_detector.config import PipelineConfig
 from spam_detector.data import Message
+from spam_detector.features import BlockConfig
 from spam_detector.inference import SpamClassifier
 from spam_detector.text import URL_TOKEN, letter_profile, normalize
+from spam_detector.training.candidates import AnalysisCache, CandidateSpec, FittedLinearModel, fit_platt
 from spam_detector.training.dedup import canonical_key, near_duplicate_groups
 from spam_detector.training.experiment import prepare_data
 
@@ -142,7 +145,7 @@ def cluster(records: list[Record]) -> tuple[list[tuple[Record, int]], dict[str, 
     return output, dict(stats)
 
 
-def development_benchmark() -> dict[str, object]:
+def development_data() -> tuple[list[tuple[Record, int]], dict[str, object]]:
     prepared = prepare_data(PipelineConfig.load())
     historical = [Record("uci_dev", m.label, m.text) for m in prepared.split.development]
     historical_test = [Record("uci_test", m.label, m.text) for m in prepared.split.test]
@@ -150,13 +153,22 @@ def development_benchmark() -> dict[str, object]:
     imc, imc_manifest = read_source("imc")
     independent = [Record("imc_test", row.label, row.text) for row in imc]
     rows, audit = cluster(historical + historical_test + phishing + independent)
+    return rows, {
+        "sources": {"ncsu": ncsu, "imc": imc_manifest, "historical_split": prepared.split.fingerprint()},
+        "overlap": audit,
+    }
+
+
+def development_benchmark() -> dict[str, object]:
+    rows, provenance = development_data()
     texts = np.asarray([normalize(row.text) for row, _ in rows])
     labels = np.asarray([row.label for row, _ in rows])
     groups = np.asarray([group for _, group in rows])
     if set(labels) != set(LABELS[:3]):
         raise ValueError("Development data lacks one or more classes after overlap quarantine")
     splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=20261122)
-    train, validation = next(splitter.split(texts, labels, groups))
+    folds = list(splitter.split(texts, labels, groups))
+    train, validation = folds[0]
     if set(labels[train]) != set(LABELS[:3]) or set(labels[validation]) != set(LABELS[:3]):
         raise ValueError("Grouped development split lacks one or more classes")
     if set(groups[train]) & set(groups[validation]):
@@ -165,6 +177,24 @@ def development_benchmark() -> dict[str, object]:
     v2, _ = SpamClassifier.load(Path("models/spam-v2"))
     v2_predictions = [v2.predict(rows[i][0].text).label for i in validation]
     scores = {"v2": confusion_matrix(labels[validation], v2_predictions, labels=LABELS).tolist()}
+    # Refit the v2 recipe using the same historical development groups and no
+    # NCSU positives. The released v2 above has already seen historical rows.
+    historical_fit = [i for i in np.setdiff1d(train, folds[1][1]) if labels[i] != "phishing"]
+    historical_calibration = [i for i in folds[1][1] if labels[i] != "phishing"]
+    config = PipelineConfig.load()
+    spec = next(CandidateSpec.from_dict(raw) for raw in config.raw["candidates"]
+                if raw["name"] == "svm_word12_char25_balanced")
+    refit = spec.fit(texts[historical_fit], (labels[historical_fit] == "spam").astype(int), AnalysisCache())
+    a, b = fit_platt(refit.scores(texts[historical_calibration]), labels[historical_calibration] == "spam")
+    calibration_model = PlattCalibration(a, b)
+    if not isinstance(refit, FittedLinearModel):
+        raise TypeError("Expected a linear v2 benchmark model")
+    refit_classifier = SpamClassifier(LinearModelArtifact(
+        "2.0.0-dev-refit", refit.space, refit.coefficients.tolist(), refit.intercept,
+        calibration_model, 0.75, AbstentionPolicy(require_known_word=True),
+    ))
+    predictions = [refit_classifier.predict(rows[i][0].text).label for i in validation]
+    scores["v2_recipe_refit"] = confusion_matrix(labels[validation], predictions, labels=LABELS).tolist()
     url_mask = np.asarray([URL_TOKEN in value.split() for value in texts])
     without_urls = np.asarray([" ".join(token for token in value.split() if token != URL_TOKEN) for value in texts])
     for name, analyzer, feature_range, inputs in (
@@ -182,8 +212,7 @@ def development_benchmark() -> dict[str, object]:
 
     return {
         "protocol": "development-only; source and class are confounded; not a release evaluation",
-        "sources": {"ncsu": ncsu, "imc": imc_manifest, "historical_split": prepared.split.fingerprint()},
-        "overlap": audit,
+        **provenance,
         "train_counts": dict(Counter(labels[train])),
         "validation_counts": dict(Counter(labels[validation])),
         "validation_group_count": len(set(groups[validation])),
@@ -194,12 +223,50 @@ def development_benchmark() -> dict[str, object]:
     }
 
 
+def export_candidate(output: Path) -> str:
+    """Fit the experimental phishing head and calibrate on separate development groups."""
+    rows, provenance = development_data()
+    texts = [normalize(row.text) for row, _ in rows]
+    labels = [row.label for row, _ in rows]
+    groups = [group for _, group in rows]
+    splitter = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=20261122)
+    train, calibration = next(splitter.split(texts, labels, groups))
+    spec = CandidateSpec(
+        "v3-phishing-word12", "logistic_regression", (BlockConfig("word", (1, 2), min_df=2),),
+        {"class_weight": "balanced"},
+    )
+    fitted = spec.fit([texts[i] for i in train], [int(labels[i] == "phishing") for i in train], AnalysisCache())
+    assert isinstance(fitted, FittedLinearModel)
+    scores = fitted.scores([texts[i] for i in calibration])
+    a, b = fit_platt(scores, [int(labels[i] == "phishing") for i in calibration])
+    artifact = LinearModelArtifact(
+        model_version="3.0.0-dev.1",
+        feature_space=fitted.space,
+        coefficients=fitted.coefficients.tolist(),
+        intercept=fitted.intercept,
+        calibration=PlattCalibration(a, b),
+        threshold=0.9,
+        abstention=AbstentionPolicy(require_known_word=True),
+        estimator=spec.name,
+    )
+    return save_artifact(artifact, output, {
+        "intended_use": "offline development only; source-confounded proxy labels",
+        "task": "experimental_phishing_head",
+        "fit_counts": dict(Counter(labels[i] for i in train)),
+        "calibration_counts": dict(Counter(labels[i] for i in calibration)),
+        **provenance,
+    })
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("acquire", "benchmark"))
+    parser.add_argument("command", choices=("acquire", "benchmark", "export"))
+    parser.add_argument("--output", type=Path, default=ROOT / "candidate")
     args = parser.parse_args()
     if args.command == "acquire":
         acquire()
+    elif args.command == "export":
+        print(export_candidate(args.output))
     else:
         print(json.dumps(development_benchmark(), indent=2))
 

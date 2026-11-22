@@ -514,3 +514,25 @@ test("cancel variation restores the cached verdict and aborts a pending revision
   await expect(page.locator("#resultLabel")).toHaveText("Likely Ham");
   expect(requests).toEqual([{ text: HAM }, { text: SPAM }, { text: HAM }]);
 });
+
+test("experimental comparison renders the prediction returned by the V3 endpoint", async ({ page }) => {
+  await page.goto("/?model=v3");
+  await expect(page.locator("#experimentalNotice")).toBeVisible();
+  const cases = [
+    { label: "phishing", spam_probability: 0.3, model_version: "3.0.0-dev.1", experimental: true },
+    { label: "ham", spam_probability: 0.1, model_version: "3.0.0-dev.1", experimental: true },
+  ];
+  await page.route("/predict/v3", async route => {
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({ json: cases.shift() });
+  });
+  await page.getByRole("textbox").fill("Please verify your account.");
+  await analyze(page);
+  await expect(page.getByRole("heading", { name: "Potential Phishing" })).toBeVisible();
+  await page.getByRole("button", { name: "Try a variation" }).click();
+  await page.getByRole("textbox").fill(HAM);
+  await analyze(page);
+  await expect(page.locator("#originalLabel")).toHaveText("Potential Phishing");
+  await expect(page.locator("#revisionLabel")).toHaveText("Likely Ham");
+  expect(cases).toHaveLength(0);
+});
