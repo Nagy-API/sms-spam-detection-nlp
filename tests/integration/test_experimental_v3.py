@@ -7,9 +7,11 @@ from spam_detector.artifact import load_artifact, save_artifact
 from tests.conftest import RELEASE_DIR
 
 
-def test_production_serves_bundled_head_with_experimental_status(monkeypatch) -> None:
+def test_production_serves_bundled_head_with_experimental_status(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("VERCEL_ENV", "production")
-    with TestClient(create_app(RELEASE_DIR)) as client:
+    monkeypatch.setenv("SPAM_MODEL_DIR", str(tmp_path / "alternate-baseline"))
+    monkeypatch.setenv("TRACE_EXPERIMENTAL_MODEL_DIR", str(tmp_path / "alternate-head"))
+    with TestClient(create_app()) as client:
         result = client.get("/model/v3")
         assert result.status_code == 200
         assert result.json()["phishing_status"] == "experimental"

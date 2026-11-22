@@ -4,9 +4,10 @@ TRACE is an educational English SMS classifier built with a static HTML/CSS/Java
 FastAPI, and a reproducible Python NLP pipeline. It lets visitors compare predictions for an
 original message and a revision.
 
-TRACE V3 combines the historically evaluated V2 spam classifier with an experimental phishing
-head. Independent phishing performance has not been established. The app provides a spam-only
-fallback and is intended for education, not fraud prevention. See the [V3 model card](docs/MODEL_CARD.md#trace-v3-release-candidate).
+The Production candidate defaults to TRACE V3, combining the historically evaluated V2 spam
+classifier with experimental phishing detection. Independent phishing performance has not been
+established. Select **Use spam-only mode** for V2 predictions. A Ham result does not guarantee
+message safety. TRACE is an educational demonstration. See the [V3 model card](docs/MODEL_CARD.md#trace-v3-release-candidate).
 
 ![TRACE V3 desktop comparison](screenshots/trace-v3-desktop.png)
 ![TRACE V3 mobile comparison](screenshots/trace-v3-mobile.png)

@@ -104,6 +104,10 @@ The redesign needs no backend or ML change. Model updates keep this contract and
 `model_version`.
 ## TRACE V3 versioned API
 
+The intended Production configuration serves both API versions using the bundled model pair.
+TRACE calls `/predict/v3` by default. Spam-only mode (`/?model=v2`) calls `/predict`.
+Phishing is experimental in Production as well as locally. A Ham verdict does not establish safety.
+
 - `POST /predict/v3` accepts the same message payload as `POST /predict`. Its labels are
   `ham`, `spam`, `phishing`, and `inconclusive`. It includes `experimental: true`.
   `spam_probability` remains the V2 historical spam score and can be null. It is never a phishing score.

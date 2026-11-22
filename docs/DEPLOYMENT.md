@@ -6,8 +6,27 @@ One Python 3.12 serverless function built from `app/main.py` (FastAPI preset), s
 the static frontend from the same origin. `vercel.json` includes `models/spam-v2/**`, `models/trace-v3/**` and
 `frontend/**` and excludes data, notebook, reports, docs, configs, tests, NLTK data, the legacy
 pickles, and `spam_detector/training/`. `.vercelignore` keeps those out of the upload as well.
-**No build command and no environment variables are required.** (Optional: `SPAM_MODEL_DIR`
-overrides the artifact directory.)
+**No custom build command or model environment variables are required.** In Vercel Production,
+the service always loads the bundled V2 and V3 model pair. Research directory overrides
+(`SPAM_MODEL_DIR` and `TRACE_EXPERIMENTAL_MODEL_DIR`) do not apply there.
+
+## Frozen Production behavior
+
+The default TRACE screen uses `POST /predict/v3`. The bundled head may return **Potential
+Phishing** as an educational experimental verdict. `GET /model/v3` must return
+`phishing_status: "experimental"` and `independent_phishing_validation: false`. Briefs
+describing a Production-disabled head refer to the earlier local-only prototype.
+
+**Use spam-only mode** links to `/?model=v2` and uses the historical classifier at
+`POST /predict`. It remains available if the V3 head cannot load or fails its baseline
+compatibility check. Both modes explain that a Ham verdict does not guarantee safety.
+
+Frozen model SHA-256 values:
+
+| Model | Version | SHA-256 |
+|---|---|---|
+| Historical spam | `2.0.0` | `5f79aee6ba36e0f4e678010a1f5be95213a934cd29eb85bdb72d9eced526f34a` |
+| Experimental phishing head | `3.0.0-rc.1` | `0f9118e7cc9f5007ad5ca06a624797b4e947da9cbb027a1ff966df23e4dff14a` |
 
 ## TRACE V3 release checklist
 
@@ -15,7 +34,10 @@ overrides the artifact directory.)
 2. Run Ruff, the full Python suite and Playwright. Build a clean copy with Vercel CLI `vercel build --prod` using the existing project settings.
 3. Wait for billing restoration, rerun mandatory GitHub checks, and resolve failures before consolidating the approved PRs in dependency order.
 4. Confirm the exact main SHA and both model digests before staging the authorized release.
-5. Stage Production without assigning its domain, then test `/health`, both model endpoints, both prediction routes, experimental labeling, V2 fallback and the responsive comparison.
+5. Stage Production without assigning its domain. Check `/health`, `/ready`, both model
+   endpoints, all four V3 outcomes, the three V2 outcomes, the mode links, the experimental
+   disclosure and the Ham safety caveat. Confirm both digests and exercise comparison on
+   mobile and desktop.
 6. Promote the verified staged deployment. Recheck anonymous public access, logs, provenance and rollback.
 
 Phishing remains experimental unless the independent evaluation gates pass. Demo deployment must preserve that disclosure.

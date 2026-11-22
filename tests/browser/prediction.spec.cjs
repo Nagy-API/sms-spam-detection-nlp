@@ -567,3 +567,23 @@ for (const width of [390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`trace-v3-${width}.png`), fullPage: true, animations: "disabled" });
   });
 }
+
+test("Production mode links switch between the experimental and spam-only APIs", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#experimentalNotice")).toContainText("has not been independently validated");
+  await page.getByRole("link", { name: "Use spam-only mode" }).click();
+  await expect(page).toHaveURL(/\?model=v2$/);
+  await expect(page.locator("#experimentalNotice")).toBeHidden();
+  await page.getByRole("textbox").fill(HAM);
+  const baseline = page.waitForResponse(response => new URL(response.url()).pathname === "/predict");
+  await analyze(page);
+  expect((await (await baseline).json()).model_version).toBe("2.0.0");
+  await expect(page.locator("#resultDesc")).toContainText("does not guarantee message safety");
+  await page.getByRole("link", { name: /Use TRACE V3/ }).click();
+  await expect(page).toHaveURL(/\?model=v3$/);
+  await page.getByRole("textbox").fill(HAM);
+  const candidate = page.waitForResponse(response => new URL(response.url()).pathname === "/predict/v3");
+  await analyze(page);
+  expect((await (await candidate).json()).experimental).toBe(true);
+  await expect(page.locator("#resultDesc")).toContainText("does not guarantee message safety");
+});

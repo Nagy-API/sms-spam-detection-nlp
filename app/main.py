@@ -229,11 +229,13 @@ _FRONTEND_CSP = (
 
 # ----------------------------------------------------------------------- the app
 def create_app(model_dir: Path | None = None, *, experimental_model_dir: Path | None = None) -> FastAPI:
-    """Application factory. ``model_dir`` defaults to ``$SPAM_MODEL_DIR`` or ``models/spam-v2``."""
+    """Serve the bundled model pair in Production and allow local research overrides elsewhere."""
     _configure_logging()
     directory = model_dir or Path(os.environ.get("SPAM_MODEL_DIR", DEFAULT_MODEL_DIR))
     experimental_path = os.environ.get("TRACE_EXPERIMENTAL_MODEL_DIR")
     experimental_directory = experimental_model_dir or (Path(experimental_path) if experimental_path else V3_MODEL_DIR)
+    if os.environ.get("VERCEL_ENV") == "production":
+        directory, experimental_directory = DEFAULT_MODEL_DIR, V3_MODEL_DIR
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
