@@ -1,0 +1,15 @@
+# TRACE v3 source audit — preliminary
+
+This is a source audit, not a completed dataset manifest, evaluation protocol, or release gate. No v3 model has been trained or approved.
+
+| Candidate | Provenance and license | Suitability and open checks |
+|---|---|---|
+| [UCI SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection) | Almeida and Gómez Hidalgo, 2011; CC BY 4.0. The existing v2 experiment uses the separately distributed Kaggle representation. | Historical ham/spam baseline, not a labeled modern phishing benchmark. Existing corpus contains personal messages. |
+| [NCSU SMS phishing](https://github.com/wspr-ncsu/sms-phishing) | Nahapetyan et al., IEEE S&P 2024; repository lists MIT license. Messages are from gateways and marked phishing by VirusTotal and APWG. | Candidate phishing source, subject to auditing label coverage, collection dates, rights and personal data. The repository says raw messages include destination numbers. Do not commit raw data. |
+| [IMC 2025 public reports](https://github.com/reportsmishing/Smishing-Dataset-IMC25) | Agarwal et al., IMC 2025; repository lists CC BY 4.0. [Paper](https://discovery.ucl.ac.uk/id/eprint/10214522/1/Agarwal_IMC_2025_Smishing.pdf) describes public reports and image extraction. | Candidate independent evaluation source, but public reports are not independently verified ground truth. Extracted messages may be translated or reconstructed, and the released text removes URLs, phone numbers and names. Source/campaign and cross-dataset overlap must be established before splitting. |
+| [Mendeley 2025 balanced dataset](https://data.mendeley.com/datasets/vmg875v4xs/1) | Munoz and Islam, 2025; CC BY 4.0. Its description states that an LLM created the 10,191 messages using the 2022 dataset. | Synthetic distribution with 3,397 examples per class. It is not independent evidence of real-world generalization; any controlled training use requires lineage and overlap checks. |
+| [Mendeley 2022 phishing dataset](https://data.mendeley.com/datasets/f45bkkt8pr/1) | Mishra and Soni, 2022; CC BY 4.0. | The 2025 synthetic set derives from this source; these cannot be treated as independent without an overlap audit. Collection, labels, privacy and class distribution require direct inspection. |
+
+No data hashes, counts, independent test metrics or acceptance thresholds have yet been verified. Before any final evaluation, acquire authorized source snapshots, inspect their licenses and label construction, establish a privacy-safe source manifest, cluster across sources, obtain independent legitimate modern notifications, and preregister gates and the locked split. Positive-only phishing sources cannot establish a legitimate-message false-positive rate. Synthetic ham is not a substitute for independent real benign messages.
+
+The existing release baseline at frontend commit 7defd54 passed 157 Python tests and 39 browser tests on the prior release audit. GitHub Actions failed before jobs started because of account billing or spending limits; no CI pass is claimed.
