@@ -112,7 +112,7 @@ def remove_exact_duplicates(messages: Sequence[Message]) -> tuple[list[Message],
 
 
 def near_duplicate_groups(
-    messages: Sequence[Message], jaccard_threshold: float
+    messages: Sequence[Message], jaccard_threshold: float, *, batch_size: int | None = None
 ) -> tuple[list[int], int, int]:
     """Assign a group id to every message. Returns ``(group_ids, template_links, jaccard_links)``."""
     n = len(messages)
@@ -140,14 +140,21 @@ def near_duplicate_groups(
     )
     matrix.data[:] = 1.0  # a shingle counts once per message
     sizes = np.asarray(matrix.sum(axis=1)).ravel()
-    intersections = sparse.triu(matrix @ matrix.T, k=1).tocoo()
-    unions = sizes[intersections.row] + sizes[intersections.col] - intersections.data
-    similar = intersections.data / unions >= jaccard_threshold
     jaccard_links = 0
-    for a, b in zip(intersections.row[similar], intersections.col[similar], strict=True):
-        if union_find.find(int(a)) != union_find.find(int(b)):
-            jaccard_links += 1
-        union_find.union(int(a), int(b))
+    step = batch_size if batch_size is not None else max(n, 1)
+    if step < 1:
+        raise ValueError("batch_size must be positive")
+    transpose = matrix.T.tocsr()
+    for start in range(0, n, step):
+        intersections = (matrix[start : start + step] @ transpose).tocoo()
+        left = intersections.row + start
+        right = intersections.col
+        unions = sizes[left] + sizes[right] - intersections.data
+        similar = (left < right) & (intersections.data / unions >= jaccard_threshold)
+        for a, b in zip(left[similar], right[similar], strict=True):
+            if union_find.find(int(a)) != union_find.find(int(b)):
+                jaccard_links += 1
+            union_find.union(int(a), int(b))
 
     roots = [union_find.find(i) for i in range(n)]
     dense_ids: dict[int, int] = {}

@@ -44,6 +44,7 @@ secrets.json
 
 # Downloaded SMS corpus. Acquisition instructions are in the README.
 /data/spam.csv
+/data/trace-v3/
 
 # Generated Vercel build files and NLTK resources
 /.vercel/
