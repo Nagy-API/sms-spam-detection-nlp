@@ -12,9 +12,9 @@
 
 ## Intended use
 
-* Screening **English SMS** for patterns associated with unsolicited commercial or prize/premium-rate
-  spam, as a **decision aid** (flag, sort, warn), with a human able to see the message.
-* Educational and portfolio demonstration of a reproducible ML system.
+* Educational and portfolio demonstration of a reproducible ML system that classifies patterns
+  associated with unsolicited commercial or prize/premium-rate English SMS.
+* Exploration with human review. Results are not intended for security-critical decisions.
 
 ## Out of scope / not validated
 

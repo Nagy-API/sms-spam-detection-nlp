@@ -1,5 +1,12 @@
 # SMS Spam Detection: a reproducible, leakage-aware NLP system
 
+TRACE is an educational English SMS classifier built with a static HTML/CSS/JavaScript frontend,
+FastAPI, and a reproducible Python NLP pipeline. It lets visitors compare predictions for an
+original message and a revision.
+
+![TRACE desktop composer](screenshots/trace-desktop.png)
+![TRACE mobile comparison](screenshots/trace-mobile-comparison.png)
+
 Classifies **English SMS** as *likely spam*, *likely ham* (legitimate), or *inconclusive*, with a
 calibrated spam probability. Behind a small web UI sits an evaluation pipeline built to be trusted:
 near-duplicate-aware splits, a locked and logged test set, cost-based decisions, and a model
@@ -7,7 +14,8 @@ artifact that rebuilds byte for byte and is served without scikit-learn, NumPy, 
 
 > **Scope.** The model screens SMS for patterns seen in the 2011 SMS Spam Collection. It does
 > **not** certify a message as safe, detect phishing or fraud in general, or classify e-mail.
-> See the [model card](docs/MODEL_CARD.md).
+> Modern smishing attacks may be missed. A ham prediction is not proof of safety. This application
+> is for educational exploration, not security-critical decisions. See the [model card](docs/MODEL_CARD.md).
 
 ## Results
 
@@ -94,11 +102,11 @@ an artifact, and `evaluate` (locked test set) requires an explicit flag and logs
 ## Tests
 
 ```powershell
-python -m pytest --cov=spam_detector --cov=app          # 157 tests; dataset-gated ones skip without data/spam.csv
+python -m pytest --cov=spam_detector --cov=app          # dataset-gated tests skip without data/spam.csv
 python -m ruff check .
 npm --prefix tests/browser ci
 npm --prefix tests/browser exec -- playwright install chromium
-npm --prefix tests/browser test                          # 19 browser regressions
+npm --prefix tests/browser test                          # browser regressions
 ```
 
 Coverage includes featurizer parity with scikit-learn, export equivalence for LR/SVM/NB, artifact

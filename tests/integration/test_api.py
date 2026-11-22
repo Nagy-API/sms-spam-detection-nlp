@@ -128,8 +128,10 @@ def test_logs_contain_metadata_but_never_message_text(client: TestClient, caplog
 
 def test_frontend_is_served_and_calls_the_same_origin_api(client: TestClient) -> None:
     page = client.get("/")
-    assert page.status_code == 200 and 'src="script.js"' in page.text
-    script = client.get("/script.js").text
+    assert page.status_code == 200
+    script_url = re.search(r'src="(script\.js\?v=[^"]+)"', page.text)
+    assert script_url
+    script = client.get("/" + script_url[1]).text
     endpoint = re.search(r'const API_URL = "([^"]+)"', script)
     assert endpoint and endpoint[1] == "/predict"
     assert client.get("/style.css").status_code == 200

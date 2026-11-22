@@ -1,199 +1,182 @@
+"use strict";
+
+// TRACE: same-origin predictions with an immutable original in comparison mode.
 const API_URL = "/predict";
 const MAX_CHARS = 5000;
-const MAX_FILE_BYTES = MAX_CHARS * 4 + 3; // UTF-8 uses up to four bytes per character, plus an optional BOM.
+const MAX_FILE_BYTES = MAX_CHARS * 4 + 3;
 const LENGTH_ERROR = "Keep your SMS message to 5,000 characters or fewer.";
 const UPLOAD_LENGTH_ERROR = "The uploaded file exceeds 5,000 characters. Choose a shorter .txt file.";
 const EMPTY_ERROR = "Enter an SMS message to analyze.";
 const SERVER_ERROR = "The prediction service had a problem. Try again.";
 const NETWORK_ERROR = "Could not reach the prediction service. Check your connection and try again.";
-
+const HAM_LIMITATION = "A Ham prediction does not guarantee message safety.";
 const OUTCOMES = {
-  spam: {
-    title: "Likely Spam",
-    description: "This message contains patterns the model associates with SMS spam.",
-    icon: "⚠",
-  },
-  ham: {
-    title: "Likely Ham",
-    description: "This message contains patterns the model associates with legitimate SMS.",
-    icon: "✓",
-  },
-  inconclusive: {
-    title: "Inconclusive",
-    description: "The message contains no words or phrases the model recognizes.",
-    icon: "?",
-  },
+  spam: { title: "Likely Spam", icon: "!", description: "This message contains patterns the model associates with SMS spam." },
+  ham: { title: "Likely Ham", icon: "✓", description: "This message contains patterns the model associates with legitimate SMS." },
+  inconclusive: { title: "Inconclusive", icon: "?", description: "The message contains no words or phrases the model recognizes." },
 };
-
-// Why the API abstained (`reason` field, see docs/API.md). Unknown or missing
-// reasons fall back to the generic inconclusive description above.
 const INCONCLUSIVE_REASONS = {
   no_letters: "The message has no words to analyze.",
   unsupported_script: "The model only supports English SMS written in the Latin alphabet.",
   no_recognized_features: "The message contains no words or phrases the model recognizes.",
 };
-
-const form = document.getElementById("smsForm");
-const smsText = document.getElementById("smsText");
-const dzPlaceholder = document.getElementById("dzPlaceholder");
-const dropzone = document.getElementById("dropzone");
-const fileInput = document.getElementById("fileInput");
-const charCount = document.getElementById("charCount");
-const statWords = document.getElementById("statWords");
-const statChars = document.getElementById("statChars");
-const statSentences = document.getElementById("statSentences");
-const uploadBtn = document.getElementById("uploadBtn");
-const clearBtn = document.getElementById("clearBtn");
-const analyzeBtn = document.getElementById("analyzeBtn");
-const messageError = document.getElementById("messageError");
-const analysisStatus = document.getElementById("analysisStatus");
-
-const resultCard = document.getElementById("resultCard");
-const resultBox = document.getElementById("resultBox");
-const resultIcon = document.getElementById("resultIcon");
-const resultLabel = document.getElementById("resultLabel");
-const resultDesc = document.getElementById("resultDesc");
+const el = (id) => document.getElementById(id);
+const form = el("smsForm"), smsText = el("smsText"), dropzone = el("dropzone"), fileInput = el("fileInput");
+const charCount = el("charCount"), uploadBtn = el("uploadBtn"), clearBtn = el("clearBtn");
+const analyzeBtn = el("analyzeBtn"), messageError = el("messageError"), analysisStatus = el("analysisStatus");
+const workspace = el("smsWorkspace"), resultPane = el("resultPane"), loadingPanel = el("loadingPanel");
+const resultCard = el("resultCard"), resultLabel = el("resultLabel"), resultDesc = el("resultDesc");
+const comparisonPanel = el("comparisonPanel"), revisionLabel = el("revisionLabel"), revisionMessage = el("revisionMessage");
+const originalMessage = el("originalMessage"), originalLabel = el("originalLabel"), comparisonNote = el("comparisonNote");
+const tryVariationBtn = el("tryVariationBtn"), startFreshBtn = el("startFreshBtn");
+const stageName = el("stageName"), editorLabel = el("editorLabel");
 
 let pendingPrediction = null;
 let readingFile = false;
 let inputRevision = 0;
+let revisionMode = false;
+let original = null;  // {text, prediction}; immutable baseline for a comparison.
+let revisionPrediction = null;
 
-function countCharacters(text) {
-  return [...text].length;
-}
+function countCharacters(text) { return [...text].length; }
+function isBlank(text) { return /^[\p{White_Space}\u001c-\u001f]*$/u.test(text); }
 
-function isBlank(text) {
-  // Match Python's whitespace-only check, including its four ASCII separators.
-  return /^[\p{White_Space}\u001c-\u001f]*$/u.test(text);
-}
-
-function updateStats() {
-  const text = smsText.value;
-  const length = countCharacters(text);
-
-  charCount.textContent = length;
-  dzPlaceholder.classList.toggle("hidden", length > 0);
-
-  if (isBlank(text)) {
-    statWords.textContent = "--";
-    statChars.textContent = "--";
-    statSentences.textContent = "--";
-    return length;
-  }
-
-  statWords.textContent = text.trim().split(/\s+/).length;
-  statChars.textContent = length;
-  statSentences.textContent = text.split(/[.!?]+/).filter((part) => part.trim()).length;
-  return length;
+function setStage(stage) {
+  workspace.dataset.stage = stage;
+  stageName.textContent = ({compose:"COMPOSE",pending:"ANALYZING",result:"RESULT",variation:"REVISION",revisionPending:"ANALYZING REVISION",compared:"COMPARISON"})[stage] || "COMPOSE";
+  editorLabel.textContent = revisionMode ? "Your revision" : "Your message";
+  smsText.setAttribute("aria-label", `${editorLabel.textContent} (SMS message)`);
+  resultPane.inert = stage === "compose";
+  resultPane.setAttribute("aria-hidden", String(stage === "compose"));
+  loadingPanel.hidden = stage !== "pending";
+  resultCard.hidden = stage !== "result";
+  comparisonPanel.hidden = !["variation", "revisionPending", "compared"].includes(stage);
 }
 
 function updateAnalyzeButton() {
-  analyzeBtn.setAttribute("aria-disabled", String(readingFile || pendingPrediction !== null));
-  analyzeBtn.textContent = pendingPrediction ? "Analyzing…" : "Analyze SMS";
+  const busy = readingFile || pendingPrediction !== null;
+  analyzeBtn.setAttribute("aria-disabled", String(busy));
+  analyzeBtn.textContent = pendingPrediction ? "Analyzing…" : (revisionMode ? "Analyze revision" : "Analyze SMS");
 }
 
-function clearFeedback() {
-  resultCard.hidden = true;
-  messageError.textContent = "";
-  analysisStatus.textContent = "";
-  smsText.removeAttribute("aria-invalid");
+function updateCount() {
+  const length = countCharacters(smsText.value);
+  charCount.textContent = String(length);
+  charCount.parentElement.classList.toggle("is-over-limit", length > MAX_CHARS);
 }
-
+function clearError() { messageError.textContent = ""; smsText.removeAttribute("aria-invalid"); }
 function showError(message, invalidInput = false) {
-  analysisStatus.textContent = "";
   messageError.textContent = message;
+  analysisStatus.textContent = "";
   if (invalidInput) smsText.setAttribute("aria-invalid", "true");
 }
+function clearView() {
+  clearError();
+  analysisStatus.textContent = "";
+  loadingPanel.hidden = true;
+  resultCard.hidden = true;
+  if (!revisionMode) comparisonPanel.hidden = true;
+}
 
-function invalidateInput() {
+function renderComparison() {
+  const baseline = original?.prediction;
+  originalMessage.textContent = original?.text || "";
+  renderVerdict(originalLabel, baseline);
+  el("originalDescription").textContent = baseline ? explanationFor(baseline) : "";
+  revisionMessage.textContent = smsText.value || "No revision entered";
+  renderVerdict(revisionLabel, revisionPrediction, pendingPrediction ? "Analyzing revision…" : "Not analyzed");
+  // Show the Ham limitation once per comparison, beside the first applicable verdict.
+  const describeRevision = baseline?.label === "ham" ? descriptionFor : explanationFor;
+  el("revisionDescription").textContent = revisionPrediction ? describeRevision(revisionPrediction) : "";
+  if (revisionPrediction) {
+    comparisonNote.textContent = revisionPrediction.label === original.prediction.label
+      ? "Classification unchanged. Edited wording does not necessarily change a prediction."
+      : "Classification changed. The edited words are not an explanation of the model's reasoning.";
+  } else comparisonNote.textContent = "The original prediction is preserved. Analyze the revision to compare actual API results.";
+}
+
+function cancelInputWork() {
   inputRevision += 1;
   pendingPrediction?.abort();
   pendingPrediction = null;
   readingFile = false;
-  clearFeedback();
+  revisionPrediction = null;
+}
+
+function invalidateInput() {
+  cancelInputWork();
+  clearView();
+  if (revisionMode && original) {
+    renderComparison();
+    setStage("variation");
+  } else {
+    original = null;
+    setStage("compose");
+  }
   updateAnalyzeButton();
 }
 
 smsText.addEventListener("input", () => {
   invalidateInput();
-  if (updateStats() > MAX_CHARS) showError(LENGTH_ERROR, true);
+  updateCount();
+  if (countCharacters(smsText.value) > MAX_CHARS) showError(LENGTH_ERROR, true);
 });
 
 uploadBtn.addEventListener("click", () => fileInput.click());
-
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   fileInput.value = "";
-  if (file) readTextFile(file);
+  if (file) void readTextFile(file);
 });
-
-["dragenter", "dragover"].forEach((event) => {
-  dropzone.addEventListener(event, (e) => {
-    e.preventDefault();
-    dropzone.classList.add("drag-over");
-  });
-});
-
+["dragenter", "dragover"].forEach((type) => dropzone.addEventListener(type, (event) => {
+  event.preventDefault();
+  dropzone.classList.add("drag-over");
+}));
 dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag-over"));
-
-dropzone.addEventListener("drop", (e) => {
-  e.preventDefault();
+dropzone.addEventListener("drop", (event) => {
+  event.preventDefault();
   dropzone.classList.remove("drag-over");
-  const file = e.dataTransfer.files[0];
-  if (file) readTextFile(file);
+  const file = event.dataTransfer?.files?.[0];
+  if (file) void readTextFile(file);
 });
 
 async function readTextFile(file) {
   invalidateInput();
-  if (!file.name.toLowerCase().endsWith(".txt")) {
-    showError("Choose a .txt file to upload.");
-    return;
-  }
-  if (file.size > MAX_FILE_BYTES) {
-    showError(UPLOAD_LENGTH_ERROR);
-    return;
-  }
-
+  if (!file.name.toLowerCase().endsWith(".txt")) { showError("Choose a .txt file to upload."); return; }
+  if (file.size > MAX_FILE_BYTES) { showError(UPLOAD_LENGTH_ERROR); return; }
   const revision = inputRevision;
   readingFile = true;
   updateAnalyzeButton();
   analysisStatus.textContent = "Reading SMS file…";
-
   try {
     const text = (await file.text()).replace(/\r\n?/g, "\n");
     if (revision !== inputRevision) return;
-    if (countCharacters(text) > MAX_CHARS) {
-      showError(UPLOAD_LENGTH_ERROR);
-      return;
-    }
+    if (countCharacters(text) > MAX_CHARS) { showError(UPLOAD_LENGTH_ERROR); return; }
     smsText.value = text;
-    updateStats();
+    updateCount();
+    if (revisionMode) renderComparison();
     analysisStatus.textContent = "SMS file loaded.";
   } catch {
     if (revision === inputRevision) showError("Could not read the file. Try uploading it again.");
   } finally {
-    if (revision === inputRevision) {
-      readingFile = false;
-      updateAnalyzeButton();
-    }
+    if (revision === inputRevision) { readingFile = false; updateAnalyzeButton(); }
   }
 }
 
 clearBtn.addEventListener("click", () => {
   invalidateInput();
   smsText.value = "";
-  updateStats();
+  updateCount();
+  if (revisionMode) renderComparison();
   analysisStatus.textContent = "Message cleared.";
+  smsText.focus();
 });
 
 async function requestPrediction(text, signal) {
   const response = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-    signal,
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }), signal,
   });
-
   if (response.status === 422) {
     const payload = await response.json().catch(() => null);
     const type = payload?.detail?.[0]?.type;
@@ -202,43 +185,91 @@ async function requestPrediction(text, signal) {
     if (type === "string_too_short" || type === "value_error" || type === "missing") error = EMPTY_ERROR;
     return { error, invalidInput: true };
   }
+  if (response.status === 413) return { error: LENGTH_ERROR, invalidInput: true };
+  if (response.status === 503) return { error: "The prediction service is unavailable. Try again later." };
   if (!response.ok) return { error: SERVER_ERROR };
-
   const result = await response.json().catch(() => null);
   if (!result || !Object.hasOwn(OUTCOMES, result.label)) return { error: SERVER_ERROR };
   return result;
 }
 
+function descriptionFor(prediction) {
+  const label = prediction.label;
+  return label === "inconclusive" && Object.hasOwn(INCONCLUSIVE_REASONS, prediction.reason)
+    ? INCONCLUSIVE_REASONS[prediction.reason]
+    : OUTCOMES[label].description;
+}
+
+function explanationFor(prediction) {
+  const description = descriptionFor(prediction);
+  return prediction.label === "ham" ? `${description} ${HAM_LIMITATION}` : description;
+}
+
+function renderVerdict(label, prediction, fallback = "") {
+  const row = label.closest(".verdict");
+  const icon = row.querySelector(".verdict-icon");
+  const indicator = row.querySelector(".verdict-indicator");
+  const outcome = prediction ? OUTCOMES[prediction.label] : null;
+  label.textContent = outcome?.title ?? fallback;
+  icon.textContent = outcome?.icon ?? "";
+  icon.hidden = indicator.hidden = !outcome;
+  if (outcome) row.dataset.outcome = prediction.label;
+  else delete row.dataset.outcome;
+}
+
+function renderResult(prediction) {
+  renderVerdict(resultLabel, prediction);
+  resultDesc.textContent = explanationFor(prediction);
+  setStage("result");
+  analysisStatus.textContent = OUTCOMES[prediction.label].title + ". " + explanationFor(prediction);
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (pendingPrediction || readingFile) return;
-
-  clearFeedback();
+  clearError();
   const text = smsText.value;
-  let inputError = "";
-  if (countCharacters(text) > MAX_CHARS) inputError = LENGTH_ERROR;
-  else if (isBlank(text)) inputError = EMPTY_ERROR;
-  if (inputError) {
-    showError(inputError, true);
-    smsText.focus();
-    return;
-  }
-
+  const error = countCharacters(text) > MAX_CHARS ? LENGTH_ERROR : isBlank(text) ? EMPTY_ERROR : null;
+  if (error) { showError(error, true); smsText.focus(); return; }
   const request = new AbortController();
   pendingPrediction = request;
+  const wasRevision = revisionMode;
+  const revision = inputRevision;
+  if (wasRevision) {
+    revisionPrediction = null;
+    renderComparison();
+    setStage("revisionPending");
+  } else setStage("pending");
   updateAnalyzeButton();
-  analysisStatus.textContent = "Analyzing SMS message…";
-
+  analysisStatus.textContent = wasRevision ? "Analyzing revised SMS message…" : "Analyzing SMS message…";
   try {
     const result = await requestPrediction(text, request.signal);
-    if (pendingPrediction !== request) return;
+    if (pendingPrediction !== request || revision !== inputRevision) return;
     if (result.error) {
+      pendingPrediction = null;
+      updateAnalyzeButton();
+      if (wasRevision) { setStage("variation"); renderComparison(); }
+      else setStage("compose");
       showError(result.error, result.invalidInput);
       return;
     }
-    showResult(result.label, result.reason);
-  } catch {
-    if (pendingPrediction === request) showError(NETWORK_ERROR);
+    if (wasRevision) {
+      revisionPrediction = result;
+      renderComparison();
+      setStage("compared");
+      analysisStatus.textContent = "Revision: " + OUTCOMES[result.label].title + ". " + explanationFor(result);
+    } else {
+      original = { text, prediction: result };
+      renderResult(result);
+    }
+  } catch (err) {
+    if (pendingPrediction === request && revision === inputRevision && err?.name !== "AbortError") {
+      pendingPrediction = null;
+      updateAnalyzeButton();
+      if (wasRevision) { setStage("variation"); renderComparison(); }
+      else setStage("compose");
+      showError(NETWORK_ERROR);
+    }
   } finally {
     if (pendingPrediction === request) {
       pendingPrediction = null;
@@ -247,18 +278,96 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-function showResult(label, reason) {
-  const { title, icon } = OUTCOMES[label];
-  let { description } = OUTCOMES[label];
-  if (label === "inconclusive" && Object.hasOwn(INCONCLUSIVE_REASONS, reason)) {
-    description = INCONCLUSIVE_REASONS[reason];
-  }
-  resultBox.className = "result-box " + label;
-  resultIcon.textContent = icon;
-  resultLabel.textContent = title;
-  resultDesc.textContent = description;
-  resultCard.hidden = false;
-  analysisStatus.textContent = title + ". " + description;
+tryVariationBtn.addEventListener("click", () => {
+  if (!original) return;
+  revisionMode = true;
+  revisionPrediction = null;
+  renderComparison();
+  setStage("variation");
+  updateAnalyzeButton();
+  analysisStatus.textContent = "Original prediction preserved. Edit and analyze your revision.";
+  smsText.focus();
+});
+function clearComparison() {
+  originalMessage.textContent = "";
+  renderVerdict(originalLabel, null);
+  el("originalDescription").textContent = "";
+  revisionMessage.textContent = "";
+  renderVerdict(revisionLabel, null, "Not analyzed");
+  el("revisionDescription").textContent = "";
 }
 
-updateStats();
+el("cancelVariationBtn").addEventListener("click", () => {
+  if (!revisionMode || !original) return;
+  cancelInputWork();
+  revisionMode = false;
+  clearComparison();
+  clearError();
+  smsText.value = original.text;
+  updateCount();
+  updateAnalyzeButton();
+  renderResult(original.prediction);
+  analysisStatus.textContent = "Variation canceled. " + analysisStatus.textContent;
+  tryVariationBtn.focus();
+});
+
+startFreshBtn.addEventListener("click", () => {
+  cancelInputWork();
+  revisionMode = false;
+  original = null;
+  clearComparison();
+  renderVerdict(resultLabel, null);
+  resultDesc.textContent = "";
+  smsText.value = "";
+  updateCount();
+  clearView();
+  setStage("compose");
+  updateAnalyzeButton();
+  analysisStatus.textContent = "Workspace cleared. Enter a new SMS message.";
+  smsText.focus();
+});
+
+// Lightweight silver mouse spotlight. No particles, canvas, third-party scripts or timers.
+(function setupPointerLight() {
+  const light = el("pointerLight");
+  const fine = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 731px)");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  // Update the external stylesheet's existing rule, never an inline style attribute.
+  const lightRule = [...document.styleSheets].flatMap(sheet => [...sheet.cssRules])
+    .find(rule => rule.selectorText === ".pointer-light");
+  if (!lightRule) return;
+  let targetX = -1000, targetY = -1000, x = -1000, y = -1000, frame = 0;
+  const radius = 325;
+  function tick() {
+    x += (targetX - x) * 0.13;
+    y += (targetY - y) * 0.13;
+    lightRule.style.transform = `translate3d(${x - radius}px,${y - radius}px,0)`;
+    if (Math.abs(targetX - x) > .45 || Math.abs(targetY - y) > .45) frame = requestAnimationFrame(tick);
+    else frame = 0;
+  }
+  document.addEventListener("pointermove", (event) => {
+    if (!fine.matches || reduce.matches || event.pointerType !== "mouse") return;
+    targetX = event.clientX;
+    targetY = event.clientY;
+    if (x < -500) { x = targetX; y = targetY; }
+    light.classList.add("is-visible");
+    if (!frame) frame = requestAnimationFrame(tick);
+  }, { passive: true });
+  function stop() {
+    light.classList.remove("is-visible");
+    cancelAnimationFrame(frame);
+    frame = 0;
+    x = y = -1000;
+  }
+  document.addEventListener("pointerleave", stop);
+  window.addEventListener("blur", stop);
+  fine.addEventListener("change", stop);
+  reduce.addEventListener("change", stop);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stop();
+  });
+})();
+
+updateCount();
+setStage("compose");
+updateAnalyzeButton();
