@@ -1,0 +1,10 @@
+# Offline training, evaluation and baseline reproduction (never deployed).
+-r requirements.txt
+joblib==1.5.3          # loads the legacy v1 pickles for the protocol audit
+nltk==3.9.4            # legacy v1 preprocessing only (python scripts/prepare_nltk.py)
+numpy==2.4.2
+regex==2026.11.19      # nltk dependency
+scikit-learn==1.8.0    # estimators, splitters, metrics; also the reference for parity tests
+scipy==1.17.0
+threadpoolctl==3.8.0
+tqdm==4.70.1           # nltk dependency

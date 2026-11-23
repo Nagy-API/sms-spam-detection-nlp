@@ -1,0 +1,48 @@
+{
+  "source": {
+    "sha256": "440e6ea9fa825578abfdd7b7932ef8393d72ef86c0c33f64676705ce40b1dfc2",
+    "rows": 5572,
+    "labels": {
+      "ham": 4825,
+      "spam": 747
+    },
+    "rejoined_split_rows": 50,
+    "mojibake_runs_repaired": 495,
+    "mojibake_runs_unrepaired": 137,
+    "rows_with_html_entities": 309
+  },
+  "deduplication": {
+    "input_messages": 5572,
+    "exact_duplicates_removed": 416,
+    "conflicting_label_messages_removed": 0,
+    "output_messages": 5156,
+    "groups": 4848,
+    "multi_message_groups": 161,
+    "largest_group": 15,
+    "mixed_label_groups": 0,
+    "linked_by_template": 62,
+    "linked_by_jaccard": 246,
+    "jaccard_threshold": 0.5,
+    "label_counts": {
+      "ham": 4515,
+      "spam": 641
+    }
+  },
+  "split": {
+    "development": {
+      "messages": 4125,
+      "spam": 513,
+      "ham": 3612,
+      "spam_rate": 0.1244,
+      "groups": 3878
+    },
+    "test": {
+      "messages": 1031,
+      "spam": 128,
+      "ham": 903,
+      "spam_rate": 0.1242,
+      "groups": 970
+    },
+    "fingerprint": "221cdf6b89901463bba5ff237b68ef64fa0693e8fbc5b853b79ccee64b9c6077"
+  }
+}
