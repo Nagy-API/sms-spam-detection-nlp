@@ -1,10 +1,12 @@
-# SMS Spam Detection: a reproducible, leakage-aware NLP system
+# TRACE V3 · English SMS Classifier
+
+[Open the live TRACE demo](https://sms-spam-detection-nlp-xi.vercel.app/)
 
 TRACE is an educational English SMS classifier built with a static HTML/CSS/JavaScript frontend,
 FastAPI, and a reproducible Python NLP pipeline. It lets visitors compare predictions for an
 original message and a revision.
 
-The Production candidate defaults to TRACE V3, combining the historically evaluated V2 spam
+The live demo defaults to TRACE V3, combining the historically evaluated V2 spam
 classifier with experimental phishing detection. Independent phishing performance has not been
 established. Select **Use spam-only mode** for V2 predictions. A Ham result does not guarantee
 message safety. TRACE is an educational demonstration. See the [V3 model card](docs/MODEL_CARD.md#trace-v3-release-candidate).
@@ -82,9 +84,11 @@ curl.exe -s -X POST http://127.0.0.1:8000/predict -H "content-type: application/
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /predict` | `{"text": "..."}` (1–5,000 code points) → `label`, `spam_probability`, `reason`, `model_version` |
+| `POST /predict` | V2 spam-only classification for 1–5,000 Unicode code points |
+| `POST /predict/v3` | V3 classification with an additional experimental phishing outcome |
 | `GET /health` · `GET /ready` | Liveness · readiness (verified model loaded) |
 | `GET /model` | Version, threshold, limits, evaluation summary and caveats |
+| `GET /model/v3` | Experimental model version, both artifact checksums and validation status |
 
 Full contract, error codes, and the frontend handoff: [docs/API.md](docs/API.md).
 
@@ -150,12 +154,14 @@ Vercel, one Python function, no build step. Runbook, safeguards, and hosted chec
 | Responsible output | Abstained only on zero features | Abstains on no letters, non-Latin script, or unknown words, with a reason |
 | Artifact | Pickles tied to one scikit-learn version | Checksummed JSON, byte-for-byte reproducible, compatibility-checked |
 | Serving | 207 MiB bundle, NLTK download at build | 20 MiB, FastAPI only, readiness/model endpoints, privacy-safe logs, body limits, CSP |
-| Engineering | 8 API tests | 157 Python tests + 19 browser tests, CI, ADRs, model card |
+| Engineering | 8 API tests | Python and browser regression suites, CI, ADRs, model card |
 
 ## Dataset and license
 
 The SMS Spam Collection (Almeida & Gómez Hidalgo, 2011) is distributed by UCI under CC BY 4.0
 ([doi:10.24432/C5CC84](https://doi.org/10.24432/C5CC84)). The Kaggle CSV used here is not
 redistributed in this repository, see [docs/DATASET.md](docs/DATASET.md). The original v1 notebook
-is kept in `notebook/` for history. Its metrics come from the v1 protocol and are superseded by
-[docs/EVALUATION.md](docs/EVALUATION.md).
+is kept in `notebook/` for history. Saved table previews containing dataset rows were removed
+from the current notebook. Earlier revisions retain those outputs. Its metrics come from the v1
+protocol and are superseded by [docs/EVALUATION.md](docs/EVALUATION.md). The legacy pickle
+files are historical artifacts outside the deployed runtime. Only load a pickle from a trusted source.

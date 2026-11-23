@@ -12,6 +12,10 @@ the service always loads the bundled V2 and V3 model pair. Research directory ov
 
 ## Frozen Production behavior
 
+Canonical URL: [TRACE on Vercel](https://sms-spam-detection-nlp-xi.vercel.app/).
+The existing project has no Git integration. Stage from a clean archive of the exact
+CI-verified `main` commit and record its full SHA in the deployment metadata.
+
 The default TRACE screen uses `POST /predict/v3`. The bundled head may return **Potential
 Phishing** as an educational experimental verdict. `GET /model/v3` must return
 `phishing_status: "experimental"` and `independent_phishing_validation: false`. Briefs
@@ -32,13 +36,19 @@ Frozen model SHA-256 values:
 
 1. Reproduce the head with `python -m spam_detector.training.v3 export` and verify both artifact digests against the bundled metadata.
 2. Run Ruff, the full Python suite and Playwright. Build a clean copy with Vercel CLI `vercel build --prod` using the existing project settings.
-3. Wait for billing restoration, rerun mandatory GitHub checks, and resolve failures before consolidating the approved PRs in dependency order.
+3. Require all GitHub Actions jobs to pass on the exact `main` SHA before release.
 4. Confirm the exact main SHA and both model digests before staging the authorized release.
 5. Stage Production without assigning its domain. Check `/health`, `/ready`, both model
    endpoints, all four V3 outcomes, the three V2 outcomes, the mode links, the experimental
    disclosure and the Ham safety caveat. Confirm both digests and exercise comparison on
    mobile and desktop.
 6. Promote the verified staged deployment. Recheck anonymous public access, logs, provenance and rollback.
+
+Stage with `vercel deploy PATH --prod --skip-domain --scope nagy-apis-projects --project
+prj_di0asm5YAbI4JjCrvYS46lE3hYLd --meta githubCommitRef=main --meta githubCommitSha=SHA`.
+Use the existing project linkage. Confirm `target=production`, `READY` and `STAGED` before
+running authenticated checks. Promote the deployment ID with `vercel promote DEPLOYMENT_ID
+--scope nagy-apis-projects`, then check the public domain with an unauthenticated client.
 
 Phishing remains experimental unless the independent evaluation gates pass. Demo deployment must preserve that disclosure.
 
@@ -103,8 +113,8 @@ While signed in to Vercel on the protected URL:
 
 Two protected Previews of the same model artifact were verified. Both were classified as Preview by
 the deployment API (`target: null`, `readySubstate: STAGED`) and by `vercel inspect`. Anonymous
-requests got a 302 to Vercel SSO. The project has only a `preview` target, no aliases, and zero
-Production deployments.
+requests got a 302 to Vercel SSO. At the time, the project had only a `preview` target and no
+Production deployment.
 
 | | Acceptance run | Fix re-verification |
 |---|---|---|
@@ -144,5 +154,6 @@ npm --prefix tests/browser test
   branch and remains the validated fallback.
 * A v2 Preview is a new immutable deployment. If it misbehaves, keep using or re-promote the
   previous Preview. No data migration is involved.
-* Production is not deployed by this branch. Promoting anything to Production needs explicit
-  owner approval.
+* For Production rollback, select the previous verified Production deployment for this project
+  and confirm its SHA before assigning the domain. Recheck anonymous health and both model
+  endpoints after reassignment. Promoting to Production requires explicit owner approval.
