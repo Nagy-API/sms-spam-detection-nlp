@@ -2,35 +2,35 @@
 
 [Open the live TRACE demo](https://sms-spam-detection-nlp-xi.vercel.app/)
 
-TRACE is an educational English SMS classifier built with a static HTML/CSS/JavaScript frontend,
-FastAPI, and a reproducible Python NLP pipeline. It lets visitors compare predictions for an
-original message and a revision.
+TRACE V3 is an educational English SMS classifier that lets you analyze a message and compare
+its prediction with a revised version. It runs on Vercel with a static HTML, CSS, and JavaScript
+frontend, a FastAPI backend, and a reproducible Python NLP pipeline.
 
-The live demo defaults to TRACE V3, combining the historically evaluated V2 spam
-classifier with experimental phishing detection. Independent phishing performance has not been
-established. Select **Use spam-only mode** for V2 predictions. A Ham result does not guarantee
-message safety. TRACE is an educational demonstration. See the [V3 model card](docs/MODEL_CARD.md#trace-v3-release-candidate).
+The live demo combines the evaluated historical V2 spam classifier with an experimental phishing
+classifier. Select **Use spam-only mode** to run V2 alone. See the [V3 model card](docs/MODEL_CARD.md#trace-v3-release-candidate).
 
 ![TRACE V3 desktop comparison](screenshots/trace-v3-desktop.png)
 ![TRACE V3 mobile comparison](screenshots/trace-v3-mobile.png)
 
-Classifies **English SMS** as *likely spam*, *likely ham* (legitimate), or *inconclusive*, with a
-calibrated spam probability. Behind a small web UI sits an evaluation pipeline built to be trusted:
-near-duplicate-aware splits, a locked and logged test set, cost-based decisions, and a model
-artifact that rebuilds byte for byte and is served without scikit-learn, NumPy, or pickle.
+## V3 outcomes
 
-> **Scope.** The model screens SMS for patterns seen in the 2011 SMS Spam Collection. It does
-> **not** certify a message as safe, detect phishing or fraud in general, or classify e-mail.
-> Modern smishing attacks may be missed. A ham prediction is not proof of safety. This application
-> is for educational exploration, not security-critical decisions. See the [model card](docs/MODEL_CARD.md).
+| Outcome | Meaning |
+|---|---|
+| **Likely Spam** | The message matches patterns associated with SMS spam. |
+| **Likely Ham** | The message matches patterns associated with legitimate SMS. A Ham result does not guarantee message safety. |
+| **Potential Phishing** | The experimental classifier flagged the message. Verify the request through a trusted channel. |
+| **Inconclusive** | TRACE abstained and gives a reason, such as no letters, unsupported script, or no recognized features. |
 
-## Results
+Predictions can be wrong and may miss modern smishing. TRACE is for educational use.
 
-Leakage-controlled evaluation ([full report](docs/EVALUATION.md)). The v1 recipe is the original
-project's pipeline (NLTK preprocessing, word counts, Naive Bayes), retrained on exactly the same
-data for a fair comparison.
+## Evaluation
 
-| | v1 recipe | **v2 (this model)** |
+The table measures **V2 spam classification** on the historical SMS Spam Collection. Both the
+original recipe and V2 used the same group-aware evaluation protocol. The locked test contains
+1,031 messages from the same corpus and era, including 128 spam messages. See the
+[full evaluation report](docs/EVALUATION.md).
+
+| Metric | Original recipe | V2 spam classifier |
 |---|---|---|
 | Spam F1, 15-fold group CV (development) | 0.861 ± 0.044 | **0.949 ± 0.014** |
 | Spam recall, CV | 0.761 | **0.913** |
@@ -38,17 +38,17 @@ data for a fair comparison.
 | Locked test: spam F1 [95% CI] | 0.914 [0.874, 0.948] | **0.980** [0.961, 0.996] |
 | Locked test: missed spam / false alarms (of 128 / 903) | 17 / 4 | **5 / 0** |
 | Locked test: PR-AUC | 0.959 | **0.994** |
-| Serverless function bundle | 207 MiB | **20 MiB** |
-| Prediction latency (typical SMS) | n/a | **0.17 ms** |
 
-Treat the CV numbers as the planning estimate. The test set is held out but internal (same corpus
-and era), with 128 spam messages.
-
-**What the audit of the original project found:** 47% of the original holdout's spam messages had
-a near-duplicate in its training data. On the leak-free part, the original model's spam recall was
-0.84, not the reported 0.92 ([details](docs/EVALUATION.md#2-how-trustworthy-were-the-v1-numbers-python--m-spam_detector-audit-legacy)).
+**V3 phishing detection has no independent performance estimate.** Its development data
+strongly confounds the dataset source with the label, so those scores cannot establish
+effectiveness on real-world SMS. See the [V3 development report](docs/V3_DEVELOPMENT.md)
+and [source audit](docs/V3_SOURCE_AUDIT.md).
 
 ## How it works
+
+The V2 spam classifier uses the following pipeline. V3 adds a separate lightweight classifier
+for the experimental phishing verdict. FastAPI serves both checksummed JSON model artifacts
+without scikit-learn, NumPy, or pickle in the runtime.
 
 ```
 text ─► abstain? (no letters / non-Latin / no known word) ─► normalize (NFKC, lowercase, mask URLs
@@ -66,7 +66,8 @@ Architecture and module map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick start (run the app)
 
-Python 3.12. The release artifact is committed, so serving needs no dataset and no ML libraries.
+Python 3.12. The repository bundles both release artifacts. Serving requires only the runtime
+dependencies.
 
 ```powershell
 python -m venv .venv
@@ -78,8 +79,8 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 Open <http://127.0.0.1:8000/>. API docs at `/docs`.
 
 ```powershell
-curl.exe -s -X POST http://127.0.0.1:8000/predict -H "content-type: application/json" -d '{\"text\":\"WINNER!! Claim your prize, call 09061701461\"}'
-# {"label":"spam","spam_probability":0.9996,"reason":null,"model_version":"2.0.0"}
+$message = @{ text = "Congratulations! You won a free prize. Call now to claim." } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/predict/v3 -Method Post -ContentType application/json -Body $message
 ```
 
 | Endpoint | Purpose |
@@ -107,6 +108,8 @@ python -m spam_detector explain "Free entry! Txt WIN to 87121"
 
 All parameters live in [`configs/pipeline.toml`](configs/pipeline.toml). `release` never overwrites
 an artifact, and `evaluate` (locked test set) requires an explicit flag and logs every run.
+The [V3 development guide](docs/V3_DEVELOPMENT.md) documents the pinned source snapshots,
+experimental benchmarks, and artifact reproduction commands.
 
 ## Tests
 
@@ -127,8 +130,9 @@ dependencies installed, and the Playwright suite.
 
 ## Deployment
 
-Vercel, one Python function, no build step. Runbook, safeguards, and hosted checks:
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Production deployment requires explicit owner approval.
+The [v3.0.0 release](https://github.com/Nagy-API/sms-spam-detection-nlp/releases/tag/v3.0.0)
+runs on Vercel as one Python function serving both the frontend and API. The
+[deployment runbook](docs/DEPLOYMENT.md) covers hosted verification and rollback.
 
 ## Documentation
 
